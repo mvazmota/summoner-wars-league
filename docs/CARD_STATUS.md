@@ -13,7 +13,7 @@ Only cards whose numbers and ability were read directly off a full-resolution ca
 | Cave Goblins | Beast Rider | Common | 2 | 3 | 3 melee | Charge | yes |
 | Cave Goblins | Horde Slinger | Common | 0 | 1 | 2 ranged | Relentless | yes |
 | Cave Goblins | Horde Climber | Common | 0 | 3 | 1 melee | Climb | yes |
-| Cave Goblins | Horde Clinger | Common | 2 | 2 | 2 melee | Immobile / Cling | **no — source was a low-res screenshot** |
+| Cave Goblins | Horde Clinger | Common | 0 | 2 | 2 melee | Immobile / Cling | yes |
 
 ## Still placeholders
 
