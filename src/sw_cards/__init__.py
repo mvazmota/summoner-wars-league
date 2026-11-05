@@ -354,11 +354,14 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "fallen_kingdom",
         "Fallen Kingdom",
-        starting=("archer", "carrier"),
+        starting=("undead_archer", "undead_carrier"),
         summoner="Ret-Talus",
         units=(
-            ("archer", "Undead Archer", AttackKind.RANGED, 2, 2, 2),
-            ("carrier", "Undead Carrier", AttackKind.MELEE, 1, 3, 2),
+            ("undead_archer", "Undead Archer", AttackKind.RANGED, 2, 3, 2),
+            ("undead_carrier", "Undead Carrier", AttackKind.MELEE, 1, 2, 3),
+            ("hellfire_cultist", "Hellfire Cultist", AttackKind.RANGED, 0, 2, 2),
+            ("elut_bal", "Elut-Bal", AttackKind.MELEE, 6, 6, 6),
+            ("gul_dass", "Gul-Dass", AttackKind.MELEE, 6, 2, 9),
         ),
         layout=((4, 0), (4, 2), ((3, 1), (3, 2))),
     ),

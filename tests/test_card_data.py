@@ -110,3 +110,19 @@ def test_every_faction_has_a_summoner_with_stats() -> None:
         summoner = deck.layout.summoner[0]
         assert summoner.life >= 8, f"{deck_id}: summoned with implausible life"
         assert summoner.strength >= 1
+
+
+def test_fallen_kingdom_is_transcribed() -> None:
+    deck = get_deck(DeckId("fallen_kingdom"))
+    assert deck.layout.summoner[0].name == "Ret-Talus"
+    assert (deck.layout.summoner[0].life, deck.layout.summoner[0].strength) == (14, 2)
+    assert {card.name for card, _ in deck.layout.units} == {"Undead Carrier", "Undead Archer"}
+
+    by_name = {card.name: card for card in deck.units}
+    assert (by_name["Hellfire Cultist"].cost, by_name["Hellfire Cultist"].life) == (0, 2)
+    assert by_name["Elut-Bal"].strength == 6
+    assert by_name["Gul-Dass"].life == 9
+
+    # One common and one champion are still missing, so the pile is short of 30.
+    assert not deck.is_complete
+    assert len(deck.composition) == DRAW_PILE_SIZE - 5

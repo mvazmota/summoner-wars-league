@@ -115,6 +115,46 @@ CARD_PHOTOS: Final[tuple[tuple[str, str], ...]] = (
         "42d7e033fcaf8bab5f38600c37c516b840a7f050c692d25af615efda471d518e/img_236bd9526afb.png",
         "breakers-deceiver",
     ),
+    (
+        "926a93feb5a2c288dfb0b78507c8c625f89b49ccaecc8fc3d3e9cfe9b6eb80a3/img_bb46499425c0.png",
+        "fallen_kingdom-ret-talus",
+    ),
+    (
+        "37a2309cabb1fdb25fcb5f0976765fc071ebbf5e778b2b875a5e83b4d7036b71/img_0b98535bf0b9.png",
+        "fallen_kingdom-elut_bal",
+    ),
+    (
+        "86cffbb25ed1a0106fdffe1472d4be339526ec11ab69751b517105e79aed0f51/img_b89b5099bdd6.png",
+        "fallen_kingdom-gul_dass",
+    ),
+    (
+        "7706745107510fd627d991d0a025041c8c6ae22885eff8a3a3a3ca945f90b9e1/img_6d5bab5d858f.png",
+        "fallen_kingdom-hellfire_cultist",
+    ),
+    (
+        "2820a555c5174fa4439a259dc51012c1b9c3d0c7b966942b6b2ddfd333e70e2a/img_4055fd448911.png",
+        "fallen_kingdom-undead_archer",
+    ),
+    (
+        "10106946f84772167eb4830d1b60881f9109e2853b9a23715afd59e962711d9a/img_bcaac5bd9a7a.png",
+        "fallen_kingdom-undead_carrier",
+    ),
+    (
+        "609415eef924da457e3d49c81addfb2d47a4bb0cde9eda0cffd810c15c548aa4/img_8aac099eed86.png",
+        "fallen_kingdom-sacrificial_pyre",
+    ),
+    (
+        "9e6649bc1d7518e650185bb2f8bd911daf84c7a608aa037cfa8b5fd1ae93752e/img_86a0b26ebc77.png",
+        "fallen_kingdom-purge",
+    ),
+    (
+        "81d056696f251327d35957c09feae5f439b73c0c91de7f6a06cac38691daa02c/img_97db73b5a295.png",
+        "fallen_kingdom-hellforged_weapon",
+    ),
+    (
+        "d028bba2d0cb8af8fcb9fefdf4ba3765c469e4065133af22a17a494abc07ecda/img_d69399e1f91e.png",
+        "fallen_kingdom-blood_summon",
+    ),
 )
 
 # The art panel is the right-hand portion of the card, below the name banner.

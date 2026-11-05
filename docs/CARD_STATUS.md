@@ -56,6 +56,26 @@ Shadow Elves start with Sage Ranger and Shadow Mage.
 The deck is **34 of 34**: four commons at 4 copies, three champions, four events at 2 copies
 and the four gates.
 
+## Fallen Kingdom — 10 of 12 distinct cards
+
+Starting setup per SW Zone: **Undead Carrier** and **Undead Archer**, which matches the photo
+already on file.
+
+| Card | Class | Cost | Life | Attack | Ability | Ability text |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ret-Talus | Summoner | — | 14 | 2 melee | Raise the Dead | yes |
+| Elut-Bal | Champion | 6 | 6 | 6 melee | Summoned by Fire | yes |
+| Gul-Dass | Champion | 6 | 9 | 2 melee | Wrath / Spawn | yes |
+| Hellfire Cultist | Common | 0 | 2 | 2 ranged | Immolate | yes |
+| Undead Archer | Common | 2 | 2 | 3 ranged | Soul Shift | yes |
+| Undead Carrier | Common | 1 | 3 | 2 melee | Soulless / Infect | yes |
+| Sacrificial Pyre | Epic Event (Summon Phase) | 1 | — | — | Active | yes |
+| Purge | Standard Event (Move Phase) | 0 | — | — | — | yes |
+| Hellforged Weapon | Standard Event (Build Phase) | 0 | — | — | Cursed | yes |
+| Blood Summon | Standard Event (Summon Phase) | 0 | — | — | — | yes |
+
+Missing: **one common** (four copies) and **one champion**, so the pile is 25 of 30.
+
 ## Still placeholders
 
 - Every other faction: all cards
