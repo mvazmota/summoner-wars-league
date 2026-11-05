@@ -66,14 +66,13 @@ def observation(state: GameState, player: PlayerId) -> Observation:  # hides opp
 # agents
 @dataclass(frozen=True)
 class AgentParams:
-    aggression: float = 0.5  # 0 = grind board, 1 = race the summoner
-    magic_hoarding: float = 0.5  # 0 = summon now, 1 = bank magic
-    risk_aversion: float = 0.5  # weight on keeping own summoner safe
-    champion_timing: float = 0.5  # hold champions vs. deploy on curve
-    determinizations: int = 3  # opponent-hand samples for search
-    search_depth: int = 1  # 0 = greedy, 1, 2 ...
+    aggression: float = 0.5          # 0 = grind board, 1 = race the summoner
+    magic_hoarding: float = 0.5      # 0 = summon now, 1 = bank magic
+    risk_aversion: float = 0.5       # weight on keeping own summoner safe
+    champion_timing: float = 0.5     # hold champions vs. deploy on curve
+    determinizations: int = 3        # opponent-hand samples for search
+    search_depth: int = 1            # 0 = greedy, 1, 2 ...
     seed: int = 0
-
 
 class Policy(Protocol):
     def choose(self, obs: Observation, legal: Sequence[Action], rng: random.Random) -> Action: ...
