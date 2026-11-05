@@ -107,3 +107,16 @@ exposed per deck as `DeckDefinition.gates = (starting_gate, five_life_gate)`.
 - Events cannot be played in the middle of resolving another effect.
 
 Implemented events and their effects are listed in [`MECHANICS.md`](./MECHANICS.md).
+
+## Force — rulebook + FAQ v1.2
+
+To force a card N spaces, slide it N clear straight spaces in a single direction (horizontal or
+vertical). **Forcing is not moving**: it does not count as the unit's move, does not trigger
+"after this unit moves" abilities, and stops at the board edge or at a card the effect cannot
+pass. Steadfast units cannot be forced at all.
+
+## Timing conflicts — rulebook p.10
+
+When two or more effects trigger at the same time, the player whose turn it is chooses the
+order. The engine cannot ask, so it resolves triggers in a fixed order documented in
+`MECHANICS.md`; when a card's outcome depends on the choice, the choice becomes an action.

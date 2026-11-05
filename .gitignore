@@ -18,3 +18,6 @@ reports/
 
 # Local card art cropped from the owner's photos: never commit it.
 art/
+
+# Official rulebook and FAQ: copyrighted, local reference only.
+rules/
