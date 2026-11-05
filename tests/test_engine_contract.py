@@ -15,6 +15,8 @@ from hypothesis import strategies as st
 
 from sw_engine.actions import EndTurn
 from sw_engine.engine import (
+    STARTING_MAGIC_FIRST,
+    STARTING_MAGIC_SECOND,
     Outcome,
     RulesError,
     initial_state,
@@ -24,8 +26,8 @@ from sw_engine.engine import (
     outcome,
     step,
 )
-from sw_engine.ids import PLAYER_A, PLAYER_B, DeckId
-from sw_engine.state import GameState, Phase, SummonerState
+from sw_engine.ids import PLAYER_A, PLAYER_B, DeckId, opponent
+from sw_engine.state import HAND_SIZE, GameState, Phase, SummonerState
 
 DECK_A = DeckId("placeholder_alpha")
 DECK_B = DeckId("placeholder_beta")
@@ -62,10 +64,19 @@ def test_state_is_frozen() -> None:
 def test_initial_hand_and_deck_sizes() -> None:
     state = _state()
     for player in state.players:
-        assert len(player.hand) == 5
-        assert len(player.deck) == 25
+        assert len(player.hand) == HAND_SIZE
+        assert len(player.deck) == 30 - HAND_SIZE
         assert player.discard == ()
-        assert player.magic == 0
+
+
+def test_first_player_starts_on_two_magic_and_opponent_on_three() -> None:
+    """Rulebook p.5: the first player begins on 2, the other on 3."""
+    state = _state()
+    active = state.active_player()
+    other = state.player(opponent(state.active))
+    assert active.magic == STARTING_MAGIC_FIRST == 2
+    assert other.magic == STARTING_MAGIC_SECOND == 3
+    assert state.phase is Phase.SUMMON
 
 
 def test_legal_actions_non_empty_and_pass_only() -> None:
@@ -85,9 +96,9 @@ def test_step_does_not_mutate_input() -> None:
 def test_end_turn_switches_player_and_advances_turn() -> None:
     state = _state()
     after = step(state, EndTurn())
-    assert after.active == PLAYER_B
+    assert after.active == opponent(state.active)
     assert after.turn == state.turn + 1
-    assert after.phase is Phase.START
+    assert after.phase is Phase.SUMMON
 
 
 def test_illegal_action_raises() -> None:

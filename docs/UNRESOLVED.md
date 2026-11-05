@@ -1,27 +1,38 @@
 # Unresolved rules questions
 
-Questions that block implementation. Nothing here may be guessed into code: the
-engine stays silent (or raises `RulesError`) until the answer is confirmed against the
-rulebook or an official FAQ.
+Questions that block implementation. Nothing here may be guessed into code: the engine
+stays silent (or raises `RulesError`) until the answer is confirmed against the rulebook,
+the FAQ, or the card itself.
+
+Confirmed rules now live in [`RULES.md`](./RULES.md) with page citations. This file only
+tracks what is still genuinely open.
 
 Format: `- [ ] <question> — affects: <card or rule> — source needed: <rulebook page / FAQ>`
 
-## Setup and geometry (blocks M1)
+## Setup data (blocks a faithful `initial_state`)
 
-- [ ] Confirm the battlefield dimensions used by the engine (`BOARD_WIDTH = 6`,
-      `BOARD_HEIGHT = 8`) — affects: `sw_engine.state`, all geometry — source: rulebook, battlefield board.
-- [ ] Confirm player-side orientation: which edge belongs to the first player, and whether the
-      engine's `(0, 0)` is a corner or a player's back row — affects: `_starting_square` — source: rulebook.
-- [ ] Confirm summoner starting squares and gate placement per faction — affects: setup in `initial_state` — source: rulebook setup section.
-- [ ] Confirm initial hand size (`INITIAL_HAND_SIZE = 5`) and starting magic (`0`) — affects: setup — source: rulebook setup section.
-- [ ] Confirm whether the summoner starts on the board at setup or is placed during the first turn — affects: setup — source: rulebook.
+- [ ] Per-summoner **starting layout**: exact squares of the summoner, its 2 starting units
+      and its starting gate — placeholders live in `_starting_square()` — source: the back of
+      each summoner card (not in the rulebook).
+- [ ] Per-summoner **life values** (12, 13, 14 …) — placeholder is `PLACEHOLDER_SUMMONER_HP = 12` — source: card data.
+- [ ] Which units are the 2 starting units per faction, and whether they are taken from the
+      deck or are additional — source: back of the summoner card + FAQ.
 
-## Turn structure (blocks M1)
+## Card semantics (blocks M3)
 
-- [ ] Exact ordering of the turn steps and whether steps may be interleaved — affects: `Phase`, `legal_actions` — source: rulebook, turn sequence.
-- [ ] Whether unused magic carries over and any cap on the magic pile — affects: `PlayerState.magic` — source: rulebook, magic phase.
+- [ ] The exact meaning of each die's **special** symbol per card, and how "= " chains resolve — source: card text + FAQ v1.2.
+- [ ] Which abilities are **mandatory** vs. optional ("may"), and their timing windows — source: FAQ v1.2 glossary.
+- [ ] Boost tokens: how `boost` / `spend 1 boost` interact with cards that grant extra effects — source: FAQ v1.2.
+- [ ] Cards under a destroyed card "are discarded but not destroyed" — confirm they grant no
+      magic and trigger no "on destroy" abilities — source: rulebook p.8.
 
-## Combat (blocks M1)
+## Turn and combat edge cases (blocks M1/M2 fidelity)
 
-- [ ] Dice counts per unit, hit thresholds, and how damage is assigned to champions vs. summoners — affects: attack resolution — source: rulebook, combat section.
-- [ ] Retreat/withdraw rules and their interaction with engagement — affects: movement legality — source: rulebook.
+- [ ] When drawing back up to 5 with fewer cards left in the draw pile, does the player draw
+      only what remains (no reshuffle)? — source: rulebook p.9 vs. p.11.
+- [ ] Can the same unit be chosen twice across a Move or Attack Phase (e.g. as two of the
+      "up to 3")? — source: rulebook p.7 ("up to 3 different units").
+- [ ] Does **Cost of Inaction** trigger when an attack was declared but dealt no damage, or
+      was cancelled by an effect? — source: FAQ v1.2.
+- [ ] Attacking through friendly structures (`Parapet`): is that the only exception, and does
+      line of fire otherwise require clear spaces? — source: rulebook p.8 + card text.

@@ -19,6 +19,7 @@ from sw_engine.observation import Observation, VisiblePlayer, visible_unit
 from sw_engine.state import (
     BOARD_HEIGHT,
     BOARD_WIDTH,
+    HAND_SIZE,
     GameState,
     Phase,
     PlayerState,
@@ -26,8 +27,16 @@ from sw_engine.state import (
     SummonerState,
 )
 
-INITIAL_HAND_SIZE = 5
-SUMMONER_STARTING_HP = 20
+# Rulebook p.5: setup draws 5; p.9: draw back up to 5 at end of turn.
+INITIAL_HAND_SIZE = HAND_SIZE
+
+# Rulebook p.5: the first player starts on magic 2, the other on magic 3.
+STARTING_MAGIC_FIRST = 2
+STARTING_MAGIC_SECOND = 3
+
+# Summoner life is per-card data (p.4 card anatomy), not a rule constant. This value is a
+# placeholder until M3 wires real card data in; see docs/CARD_STATUS.md.
+PLACEHOLDER_SUMMONER_HP = 12
 
 
 class Outcome(Enum):
@@ -68,7 +77,9 @@ def _starting_square(player: PlayerId) -> Square:
     return Square(x, 0) if player == PLAYER_A else Square(x, BOARD_HEIGHT - 1)
 
 
-def _build_player(deck_id: DeckId, player: PlayerId, rng: random.Random) -> PlayerState:
+def _build_player(
+    deck_id: DeckId, player: PlayerId, starting_magic: int, rng: random.Random
+) -> PlayerState:
     definition = get_deck(deck_id)
     cards: list[CardId] = list(definition.cards)
     rng.shuffle(cards)
@@ -80,9 +91,9 @@ def _build_player(deck_id: DeckId, player: PlayerId, rng: random.Random) -> Play
             owner=player,
             card=CardId(f"{definition.deck_id}-summoner"),
             position=_starting_square(player),
-            hp=SUMMONER_STARTING_HP,
+            hp=PLACEHOLDER_SUMMONER_HP,
         ),
-        magic=0,
+        magic=starting_magic,
         deck=remaining,
         hand=hand,
         discard=(),
@@ -94,12 +105,20 @@ def initial_state(deck_a: DeckId, deck_b: DeckId, seed: int) -> GameState:
 
     One `random.Random` per player, derived from the game seed, so that shuffles are
     independent and reproducible. Never seed from the clock or from `hash()`.
+
+    Rulebook p.5: the first player is determined at random and starts on magic 2 while
+    the opponent starts on magic 3, compensating the second player for moving second.
     """
+    chooser = derive_rng(seed, PLAYER_A)
+    first: PlayerId = PLAYER_A if chooser.random() < 0.5 else PLAYER_B
+    second = opponent(first)
+    magic_by_player = {first: STARTING_MAGIC_FIRST, second: STARTING_MAGIC_SECOND}
+
     players: tuple[PlayerState, PlayerState] = (
-        _build_player(deck_a, PLAYER_A, derive_rng(seed, PLAYER_A)),
-        _build_player(deck_b, PLAYER_B, derive_rng(seed, PLAYER_B)),
+        _build_player(deck_a, PLAYER_A, magic_by_player[PLAYER_A], derive_rng(seed, PLAYER_A)),
+        _build_player(deck_b, PLAYER_B, magic_by_player[PLAYER_B], derive_rng(seed, PLAYER_B)),
     )
-    return GameState(turn=1, active=PLAYER_A, phase=Phase.START, players=players, seed=seed)
+    return GameState(turn=1, active=first, phase=Phase.SUMMON, players=players, seed=seed)
 
 
 def legal_actions(state: GameState) -> tuple[Action, ...]:
@@ -123,7 +142,7 @@ def step(state: GameState, action: Action) -> GameState:
             return GameState(
                 turn=state.turn + 1,
                 active=opponent(state.active),
-                phase=Phase.START,
+                phase=Phase.SUMMON,
                 players=state.players,
                 units=state.units,
                 seed=state.seed,

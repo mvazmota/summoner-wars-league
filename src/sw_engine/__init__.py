@@ -9,7 +9,9 @@ from __future__ import annotations
 from sw_engine.actions import Action, EndTurn
 from sw_engine.engine import (
     INITIAL_HAND_SIZE,
-    SUMMONER_STARTING_HP,
+    PLACEHOLDER_SUMMONER_HP,
+    STARTING_MAGIC_FIRST,
+    STARTING_MAGIC_SECOND,
     Outcome,
     RulesError,
     initial_state,
@@ -24,6 +26,8 @@ from sw_engine.observation import Observation, VisiblePlayer, VisibleUnit
 from sw_engine.state import (
     BOARD_HEIGHT,
     BOARD_WIDTH,
+    HAND_SIZE,
+    MAGIC_MAX,
     GameState,
     Phase,
     PlayerState,
@@ -35,11 +39,15 @@ from sw_engine.state import (
 __all__ = [
     "BOARD_HEIGHT",
     "BOARD_WIDTH",
+    "HAND_SIZE",
     "INITIAL_HAND_SIZE",
+    "MAGIC_MAX",
+    "PLACEHOLDER_SUMMONER_HP",
     "PLAYERS",
     "PLAYER_A",
     "PLAYER_B",
-    "SUMMONER_STARTING_HP",
+    "STARTING_MAGIC_FIRST",
+    "STARTING_MAGIC_SECOND",
     "Action",
     "CardId",
     "DeckId",

@@ -17,26 +17,30 @@ from typing import Final
 
 from sw_engine.ids import CardId, PlayerId, UnitId
 
-# Board dimensions. TODO(rules): confirm against the official board before M1 —
-# tracked in docs/UNRESOLVED.md.
+# Battlefield geometry — rulebook p.13/15: ROW = "6 adjacent spaces", COLUMN = "8".
 BOARD_WIDTH: Final[int] = 6
 BOARD_HEIGHT: Final[int] = 8
 
+# Magic track maximum — rulebook p.15.
+MAGIC_MAX: Final[int] = 15
+
+# Hand size kept at end of turn — rulebook p.5 (setup draws 5) and p.9 (draw up to 5).
+HAND_SIZE: Final[int] = 5
+
 
 class Phase(Enum):
-    """Turn phases.
+    """Turn phases, in the order the rulebook mandates (p.6).
 
-    Summoner Wars plays a turn as an ordered sequence of steps; the engine keeps the
-    current one in the state so that legality checks and search do not have to carry
-    a parallel cursor.
+    The five phases are completed in this exact order; the draw step happens after
+    MAGIC and before the opponent's turn (p.9).
     """
 
-    START = auto()
-    BUILD_MAGIC = auto()
     SUMMON = auto()
     MOVE = auto()
+    BUILD = auto()
     ATTACK = auto()
-    END = auto()
+    MAGIC = auto()
+    DRAW = auto()
 
 
 @dataclass(frozen=True, slots=True, order=True)
