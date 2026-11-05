@@ -56,4 +56,17 @@ class DiscardForMagic:
     card: CardId
 
 
-type Action = EndPhase | SummonUnit | BuildStructure | MoveUnit | AttackUnit | DiscardForMagic
+@dataclass(frozen=True, slots=True)
+class PlayEvent:
+    """Play `card` during the phase printed on it, paying its cost (p.9).
+
+    `targets` carries the units an effect needs, in the order the effect specifies.
+    """
+
+    card: CardId
+    targets: tuple[UnitId, ...] = ()
+
+
+type Action = (
+    EndPhase | SummonUnit | BuildStructure | MoveUnit | AttackUnit | DiscardForMagic | PlayEvent
+)

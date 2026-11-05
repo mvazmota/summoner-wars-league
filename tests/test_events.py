@@ -1,0 +1,231 @@
+"""Event cards: playing them, paying for them, and the four Cave Goblins effects.
+
+Rules referenced: rulebook p.9 — play an event on the phase printed on the card, pay its
+cost, resolve it, discard it; ACTIVE events go to the active area instead and are discarded
+at the start of your next turn.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from typing import Final
+
+import pytest
+
+from sw_core import AttackKind, CardId, Phase, PlayerId, Square, UnitId, UnitKind
+from sw_engine.actions import AttackUnit, EndPhase, MoveUnit, PlayEvent
+from sw_engine.engine import (
+    RulesError,
+    _effective_strength,
+    initial_state,
+    legal_actions,
+    step,
+)
+from sw_engine.ids import PLAYER_A, PLAYER_B, DeckId
+from sw_engine.state import GameState, PlayerState, UnitState
+
+PILE_ON: Final[CardId] = CardId("cave_goblins-pile_on")
+UNRELENTING: Final[CardId] = CardId("cave_goblins-unrelenting")
+ENRAGE: Final[CardId] = CardId("cave_goblins-enrage_the_horde")
+SNEAK: Final[CardId] = CardId("cave_goblins-sneak")
+CLIMBER: Final[CardId] = CardId("cave_goblins-horde_climber")
+SLINGER: Final[CardId] = CardId("cave_goblins-slinger")
+BEAST_RIDER: Final[CardId] = CardId("cave_goblins-beast_rider")
+
+
+def _base() -> GameState:
+    return initial_state(DeckId("cave_goblins"), DeckId("savanna_elves"), seed=11)
+
+
+def _battle(
+    units: tuple[UnitState, ...] = (),
+    *,
+    phase: Phase,
+    hand: tuple[CardId, ...] = (),
+    magic: int = 10,
+    active: PlayerId = PLAYER_A,
+) -> GameState:
+    """A state with the given extra units, a stacked hand and a chosen phase."""
+    base = _base()
+    keep = tuple(u for u in base.units if u.kind in (UnitKind.SUMMONER, UnitKind.GATE))
+    first, second = base.players
+    first = dataclasses.replace(first, hand=hand, magic=magic, deck=(), discard=())
+    second = dataclasses.replace(second, hand=(), magic=0, deck=(), discard=())
+    pair: tuple[PlayerState, PlayerState] = (first, second)
+    return dataclasses.replace(
+        base,
+        players=pair,
+        units=keep + units,
+        phase=phase,
+        active=active,
+        moved=(),
+        attacked=(),
+        attacked_any=False,
+        extra_attackers=(),
+    )
+
+
+def _unit(
+    unit_id: int,
+    card: CardId,
+    position: Square,
+    *,
+    owner: PlayerId = PLAYER_A,
+    strength: int = 2,
+    life: int = 3,
+    damage: int = 0,
+    attack: AttackKind = AttackKind.MELEE,
+) -> UnitState:
+    return UnitState(
+        unit_id=UnitId(unit_id),
+        owner=owner,
+        card=card,
+        kind=UnitKind.UNIT,
+        attack=attack,
+        position=position,
+        strength=strength,
+        life=life,
+        damage=damage,
+    )
+
+
+def test_an_event_is_only_legal_on_its_printed_phase() -> None:
+    attack = _battle(phase=Phase.ATTACK, hand=(PILE_ON,))
+    assert any(isinstance(a, PlayEvent) for a in legal_actions(attack))
+
+    move = _battle(phase=Phase.MOVE, hand=(PILE_ON,))
+    assert not any(isinstance(a, PlayEvent) for a in legal_actions(move))
+
+
+def test_playing_an_event_pays_its_cost_and_discards_it() -> None:
+    unit = _unit(100, CLIMBER, Square(1, 1))
+    state = _battle((unit,), phase=Phase.MOVE, hand=(SNEAK,), magic=4)
+
+    after = step(state, PlayEvent(SNEAK, (unit.unit_id,)))
+
+    seat = after.player(PLAYER_A)
+    assert seat.magic == 4  # Sneak costs 0
+    assert SNEAK not in seat.hand
+    assert seat.discard == (SNEAK,)
+
+
+def test_an_active_event_sits_in_the_active_area_then_is_discarded_next_turn() -> None:
+    state = _battle(phase=Phase.ATTACK, hand=(PILE_ON,), magic=3)
+    after = step(state, PlayEvent(PILE_ON))
+    assert after.player(PLAYER_A).active_events == (PILE_ON,)
+    assert PILE_ON not in after.player(PLAYER_A).discard
+
+    # Play out the rest of the turn and the opponent's turn.
+    state = after
+    for _ in range(20):
+        if state.active == PLAYER_A and state.turn >= 3:
+            break
+        state = step(state, EndPhase())
+
+    assert state.player(PLAYER_A).active_events == ()
+    assert PILE_ON in state.player(PLAYER_A).discard
+
+
+def test_pile_on_adds_strength_per_adjacent_friendly_unit() -> None:
+    target = _unit(200, CLIMBER, Square(3, 3), owner=PLAYER_B, life=6)
+    attacker = _unit(100, BEAST_RIDER, Square(3, 2), strength=3)
+    neighbours = (
+        _unit(101, SLINGER, Square(2, 3)),
+        _unit(102, SLINGER, Square(3, 4)),
+    )
+    state = _battle((target, attacker, *neighbours), phase=Phase.ATTACK)
+
+    plain = _effective_strength(state, attacker, target)
+    assert plain == 3
+
+    seat = state.player(PLAYER_A)
+    armed = dataclasses.replace(
+        state, players=(dataclasses.replace(seat, active_events=(PILE_ON,)), *state.players[1:])
+    )
+    assert _effective_strength(armed, attacker, target) == 5  # 3 printed + 2 adjacent friends
+
+
+def test_unrelenting_returns_a_common_to_hand_instead_of_destroying_it() -> None:
+    doomed = _unit(100, CLIMBER, Square(3, 2), life=3, damage=2)
+    killer = _unit(200, BEAST_RIDER, Square(3, 3), owner=PLAYER_B, strength=6)
+    state = _battle((doomed, killer), phase=Phase.ATTACK, active=PLAYER_B)
+    first, second = state.players
+    ordered: tuple[PlayerState, PlayerState] = (
+        dataclasses.replace(first, active_events=(UNRELENTING,)),
+        second,
+    )
+    state = dataclasses.replace(state, players=ordered)
+
+    after = step(state, AttackUnit(killer.unit_id, doomed.unit_id))
+
+    assert all(u.unit_id != doomed.unit_id for u in after.units), "the unit leaves the battlefield"
+    assert CLIMBER in after.player(PLAYER_A).hand
+
+
+def test_enrage_lets_zero_cost_units_attack_again() -> None:
+    climber = _unit(100, CLIMBER, Square(3, 2), strength=2)
+    target = _unit(200, CLIMBER, Square(3, 3), owner=PLAYER_B, life=9)
+    state = _battle((climber, target), phase=Phase.ATTACK, hand=(ENRAGE,), magic=5)
+
+    struck = step(state, AttackUnit(climber.unit_id, target.unit_id))
+    assert not any(
+        isinstance(a, AttackUnit) and a.attacker == climber.unit_id for a in legal_actions(struck)
+    )
+
+    enraged = step(struck, PlayEvent(ENRAGE))
+    again = [a for a in legal_actions(enraged) if isinstance(a, AttackUnit)]
+    assert any(a.attacker == climber.unit_id for a in again), "the extra attack is granted"
+
+
+def test_sneak_pushes_a_zero_cost_unit_away_from_my_summoner() -> None:
+    unit = _unit(100, CLIMBER, Square(3, 2))
+    state = _battle((unit,), phase=Phase.MOVE, hand=(SNEAK,))
+
+    after = step(state, PlayEvent(SNEAK, (unit.unit_id,)))
+
+    summoner = after.summoner(PLAYER_A)
+    moved = after.unit(unit.unit_id)
+    assert moved.position.distance_to(summoner.position) > unit.position.distance_to(
+        summoner.position
+    )
+
+
+def test_an_event_without_an_effect_handler_cannot_be_played() -> None:
+    """Card text without engine support stays out of legal_actions instead of doing nothing."""
+    state = _battle(phase=Phase.ATTACK, hand=(PILE_ON,))
+    with pytest.raises(RulesError):
+        step(dataclasses.replace(state, phase=Phase.MOVE), PlayEvent(PILE_ON))
+
+
+# --------------------------------------------------------------------------------------
+# Printed unit abilities that the engine honours
+# --------------------------------------------------------------------------------------
+
+
+def test_immobile_units_cannot_move() -> None:
+    clinger = _unit(100, CardId("cave_goblins-horde_clinger"), Square(2, 1))
+    state = _battle((clinger,), phase=Phase.MOVE)
+    assert not any(
+        isinstance(a, MoveUnit) and a.unit_id == clinger.unit_id for a in legal_actions(state)
+    )
+
+
+def test_charge_extends_the_move_to_four_straight_spaces() -> None:
+    rider = _unit(100, BEAST_RIDER, Square(2, 1))
+    state = _battle((rider,), phase=Phase.MOVE)
+    squares = {
+        a.to for a in legal_actions(state) if isinstance(a, MoveUnit) and a.unit_id == rider.unit_id
+    }
+    assert Square(2, 5) in squares, "four spaces straight ahead"
+    assert Square(0, 5) not in squares, "charge is straight only"
+
+
+def test_relentless_attacks_even_after_the_three_unit_limit() -> None:
+    slinger = _unit(100, SLINGER, Square(3, 2), attack=AttackKind.RANGED, strength=2)
+    others = tuple(_unit(110 + i, CLIMBER, Square(i, 2)) for i in range(3))
+    target = _unit(200, CLIMBER, Square(3, 3), owner=PLAYER_B, life=9)
+    state = _battle((slinger, *others, target), phase=Phase.ATTACK)
+
+    state = dataclasses.replace(state, attacked=(UnitId(110), UnitId(111), UnitId(112)))
+    attacks = [a for a in legal_actions(state) if isinstance(a, AttackUnit)]
+    assert any(a.attacker == slinger.unit_id for a in attacks)

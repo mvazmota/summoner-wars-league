@@ -96,3 +96,14 @@ while another effect is resolving.
 
 Encoded in `sw_cards` as `GATE_LIFE = 10`, `GATE_LIFE_STANDARD = 5`, `GATE_COST = 0`, and
 exposed per deck as `DeckDefinition.gates = (starting_gate, five_life_gate)`.
+
+## Events — p.9
+
+- Play an event on your turn **during the phase printed on the card**, paying its cost.
+  Resolve it, then discard it.
+- An event with the **ACTIVE** keyword is not discarded: it goes to your active area, where
+  its effect stays on. It is discarded at the start of your next turn.
+- You cannot have two active events with the same name at the same time.
+- Events cannot be played in the middle of resolving another effect.
+
+Implemented events and their effects are listed in [`MECHANICS.md`](./MECHANICS.md).

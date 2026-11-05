@@ -84,6 +84,7 @@ class PlayerState:
     deck: tuple[CardId, ...]
     hand: tuple[CardId, ...]
     discard: tuple[CardId, ...] = ()
+    active_events: tuple[CardId, ...] = ()
 
     def zone_sizes(self) -> tuple[int, int, int]:
         return (len(self.deck), len(self.hand), len(self.discard))
@@ -101,6 +102,7 @@ class GameState:
     moved: tuple[UnitId, ...] = ()
     attacked: tuple[UnitId, ...] = ()
     attacked_any: bool = False
+    extra_attackers: tuple[UnitId, ...] = ()
 
     def player(self, player: PlayerId) -> PlayerState:
         for state in self.players:
@@ -139,7 +141,8 @@ class GameState:
         vary: both are salted per process and would break cross-run determinism.
         """
         players: tuple[object, ...] = tuple(
-            (p.player, p.summoner_id, p.magic, p.deck, p.hand, p.discard) for p in self.players
+            (p.player, p.summoner_id, p.magic, p.deck, p.hand, p.discard, p.active_events)
+            for p in self.players
         )
         units: tuple[object, ...] = tuple(
             (
@@ -166,6 +169,7 @@ class GameState:
             tuple(sorted(self.moved)),
             tuple(sorted(self.attacked)),
             self.attacked_any,
+            tuple(sorted(self.extra_attackers)),
         )
 
     def state_hash(self) -> str:

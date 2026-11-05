@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections.abc import Callable
 from dataclasses import replace
 from enum import Enum, auto
+from typing import Final
 
 from sw_cards import CardDefinition, get_card, get_deck
 from sw_engine.actions import (
@@ -23,6 +25,7 @@ from sw_engine.actions import (
     DiscardForMagic,
     EndPhase,
     MoveUnit,
+    PlayEvent,
     SummonUnit,
 )
 from sw_engine.dice import hits, roll
@@ -55,6 +58,7 @@ RANGED_RANGE = 3
 
 # Rulebook p.7: a unit moves 1 or 2 spaces per Move Phase.
 MAX_MOVE_DISTANCE = 2
+CHARGE_DISTANCE = 4  # Beast Rider: may move 1 to 4 clear straight spaces instead
 
 
 class Outcome(Enum):
@@ -181,6 +185,104 @@ def initial_state(deck_a: DeckId, deck_b: DeckId, seed: int) -> GameState:
 
 
 # --------------------------------------------------------------------------------------
+# Event effects
+#
+# Card ids are the key, because the effect belongs to the printed card, not to a class of
+# cards. A card with no handler here is simply not playable yet, which keeps unimplemented
+# effects out of `legal_actions` instead of silently doing nothing.
+# --------------------------------------------------------------------------------------
+
+PILE_ON = CardId("cave_goblins-pile_on")
+UNRELENTING = CardId("cave_goblins-unrelenting")
+ENRAGE_THE_HORDE = CardId("cave_goblins-enrage_the_horde")
+SNEAK = CardId("cave_goblins-sneak")
+
+
+def _active_cards(state: GameState, player: PlayerId) -> tuple[CardId, ...]:
+    return state.player(player).active_events
+
+
+def _zero_cost_units(state: GameState, player: PlayerId) -> tuple[UnitState, ...]:
+    return tuple(
+        unit
+        for unit in state.units_of(player)
+        if unit.kind is UnitKind.UNIT and get_card(unit.card).cost == 0
+    )
+
+
+def _event_pile_on(state: GameState, player: PlayerId, targets: tuple[UnitId, ...]) -> GameState:
+    """Pile On is an ACTIVE event: nothing happens now, the effect is read during attacks."""
+    return state
+
+
+def _event_unrelenting(
+    state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
+) -> GameState:
+    """Unrelenting is ACTIVE; its effect is applied when a common would be destroyed."""
+    return state
+
+
+def _event_enrage_the_horde(
+    state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
+) -> GameState:
+    """Every friendly 0 cost unit may resolve an extra attack."""
+    granted = tuple(unit.unit_id for unit in _zero_cost_units(state, player))
+    if not granted:
+        raise RulesError("no friendly 0 cost units to enrage")
+    return replace(state, extra_attackers=tuple(dict.fromkeys((*state.extra_attackers, *granted))))
+
+
+def _event_sneak(state: GameState, player: PlayerId, targets: tuple[UnitId, ...]) -> GameState:
+    """Force each targeted 0 cost unit 1 space away from your own summoner."""
+    if not targets:
+        raise RulesError("Sneak needs at least one target")
+    allowed = {unit.unit_id for unit in _zero_cost_units(state, player)}
+    summoner = state.summoner(player)
+    units = list(state.units)
+    for unit_id in targets:
+        if unit_id not in allowed:
+            raise RulesError(f"{unit_id!r} is not a friendly 0 cost unit")
+        index = next(i for i, u in enumerate(units) if u.unit_id == unit_id)
+        unit = units[index]
+        step_x = (unit.position.x > summoner.position.x) - (unit.position.x < summoner.position.x)
+        step_y = (unit.position.y > summoner.position.y) - (unit.position.y < summoner.position.y)
+        candidate = Square(unit.position.x + step_x, unit.position.y + step_y)
+        if state.is_empty(candidate) and candidate.is_on_board():
+            units[index] = replace(unit, position=candidate)
+    return replace(state, units=tuple(units))
+
+
+EFFECT_HANDLERS: Final[
+    dict[CardId, Callable[[GameState, PlayerId, tuple[UnitId, ...]], GameState]]
+] = {
+    PILE_ON: _event_pile_on,
+    UNRELENTING: _event_unrelenting,
+    ENRAGE_THE_HORDE: _event_enrage_the_horde,
+    SNEAK: _event_sneak,
+}
+
+
+def _event_legal(state: GameState, player: PlayerId, card_id: CardId) -> bool:
+    """A card can be played on its printed phase, if paid for and implemented (p.9)."""
+    card = get_card(card_id)
+    if card.kind is not UnitKind.EVENT:
+        return False
+    if card.card_id not in EFFECT_HANDLERS:
+        return False
+    if card.phase is not state.phase:
+        return False
+    player_state = state.player(player)
+    if card.cost > player_state.magic:
+        return False
+    # Active events: one with the same name at a time (p.9).
+    if card.ability_name and "ACTIVE" in card.ability_name.upper():
+        names = {get_card(active).name for active in player_state.active_events}
+        if card.name in names:
+            return False
+    return True
+
+
+# --------------------------------------------------------------------------------------
 # Legality helpers
 # --------------------------------------------------------------------------------------
 
@@ -244,15 +346,32 @@ def _path_is_clear(state: GameState, origin: Square, target: Square) -> bool:
     return True
 
 
+def _has_ability(card_id: CardId, keyword: str) -> bool:
+    """True when the printed ability text carries `keyword` (e.g. Charge, Relentless).
+
+    Unknown cards return False: tests build synthetic units, and a missing definition must
+    never crash the rules engine mid-game.
+    """
+    try:
+        card = get_card(card_id)
+    except KeyError:
+        return False
+    haystack = f"{card.ability_name or ''} {card.ability or ''}".lower()
+    return keyword.lower() in haystack
+
+
 def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -> bool:
     if unit.owner != player or not unit.can_move():
+        return False
+    if _has_ability(unit.card, "Immobile"):
         return False
     if unit.unit_id in state.moved or len(state.moved) >= MAX_UNITS_PER_PHASE:
         return False
     if not to.is_on_board() or not state.is_empty(to):
         return False
     distance = unit.position.distance_to(to)
-    if distance < 1 or distance > MAX_MOVE_DISTANCE:
+    limit = CHARGE_DISTANCE if _has_ability(unit.card, "Charge") else MAX_MOVE_DISTANCE
+    if distance < 1 or distance > limit:
         return False
     return _path_is_clear(state, unit.position, to)
 
@@ -260,7 +379,13 @@ def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -
 def _can_attack(state: GameState, attacker: UnitState, target: UnitState, player: PlayerId) -> bool:
     if attacker.owner != player or not attacker.can_attack():
         return False
-    if attacker.unit_id in state.attacked or len(state.attacked) >= MAX_UNITS_PER_PHASE:
+    # Relentless is a standing invitation for an extra attack, so it ignores both the
+    # once-per-phase rule and the three-unit limit.
+    relentless = _has_ability(attacker.card, "Relentless")
+    granted = attacker.unit_id in state.extra_attackers or relentless
+    if not granted and (
+        attacker.unit_id in state.attacked or len(state.attacked) >= MAX_UNITS_PER_PHASE
+    ):
         return False
     if target.owner == player:
         return False
@@ -312,7 +437,9 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
 
     elif state.phase is Phase.ATTACK:
         for unit in state.units:
-            if unit.owner != player or unit.unit_id in state.attacked:
+            immune = unit.unit_id in state.extra_attackers or _has_ability(unit.card, "Relentless")
+            already = unit.unit_id in state.attacked and not immune
+            if unit.owner != player or already:
                 continue
             actions.extend(
                 AttackUnit(unit.unit_id, target.unit_id)
@@ -322,6 +449,19 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
 
     elif state.phase is Phase.MAGIC:
         actions.extend(DiscardForMagic(card_id) for card_id in player_state.hand)
+
+    # Events are legal on the phase printed on the card, so this check spans phases.
+    for card_id in player_state.hand:
+        if not _event_legal(state, player, card_id):
+            continue
+        card = get_card(card_id)
+        if card.card_id == SNEAK:
+            candidates = _zero_cost_units(state, player)
+            actions.extend(PlayEvent(card_id, (unit.unit_id,)) for unit in candidates)
+            if len(candidates) > 1:
+                actions.append(PlayEvent(card_id, tuple(u.unit_id for u in candidates)))
+        else:
+            actions.append(PlayEvent(card_id))
 
     actions.append(EndPhase())
     return tuple(actions)
@@ -428,6 +568,18 @@ def _apply_damage(state: GameState, target: UnitState, amount: int) -> GameState
     if damaged.is_alive():
         units = tuple(damaged if u.unit_id == target.unit_id else u for u in state.units)
         return replace(state, units=units)
+    if UNRELENTING in _active_cards(state, target.owner) and (
+        get_card(target.card).card_class == "Common"
+    ):
+        # A friendly common that would be destroyed returns to hand instead.
+        player_state = state.player(target.owner)
+        returned = replace(
+            player_state,
+            hand=(*player_state.hand, target.card),
+        )
+        without = replace(state, units=tuple(u for u in state.units if u.unit_id != target.unit_id))
+        return _with_player(without, returned)
+
     if damaged.kind is UnitKind.SUMMONER:
         # A summoner never leaves the battlefield: its death is a loss condition, and
         # removing it would erase the identity the terminal check needs.
@@ -444,7 +596,7 @@ def _attack(state: GameState, action: AttackUnit) -> GameState:
         raise RulesError(f"{action.attacker!r} cannot attack {action.target!r}")
 
     rng = derive_rng(state.seed, state.rng_counter + 1)
-    rolls = roll(attacker.strength, rng)
+    rolls = roll(_effective_strength(state, attacker, target), rng)
     damage = hits(rolls, attacker.attack)
 
     after = _apply_damage(state, target, damage)
@@ -459,6 +611,7 @@ def _attack(state: GameState, action: AttackUnit) -> GameState:
         rng_counter=state.rng_counter + 1,
         attacked=(*state.attacked, attacker.unit_id),
         attacked_any=True,
+        extra_attackers=tuple(u for u in state.extra_attackers if u != attacker.unit_id),
     )
 
 
@@ -475,6 +628,44 @@ def _discard_for_magic(state: GameState, action: DiscardForMagic) -> GameState:
     player_state = _remove_from_hand(player_state, action.card)
     player_state = _gain_magic(player_state, 1)
     return _with_player(state, player_state)
+
+
+def _play_event(state: GameState, action: PlayEvent) -> GameState:
+    """Pay the cost, resolve the effect, then discard or park it in the active area (p.9)."""
+    player = state.active
+    if not _event_legal(state, player, action.card):
+        raise RulesError(f"{action.card!r} cannot be played right now")
+    card = get_card(action.card)
+    handler = EFFECT_HANDLERS[card.card_id]
+
+    player_state = _spend_magic(state.player(player), card.cost)
+    player_state = _remove_from_hand(player_state, action.card)
+    state = _with_player(state, player_state)
+
+    state = handler(state, player, action.targets)
+
+    player_state = state.player(player)
+    if card.ability_name and "ACTIVE" in card.ability_name.upper():
+        player_state = replace(
+            player_state, active_events=(*player_state.active_events, card.card_id)
+        )
+    else:
+        player_state = replace(player_state, discard=(*player_state.discard, card.card_id))
+    return _with_player(state, player_state)
+
+
+def _effective_strength(state: GameState, attacker: UnitState, target: UnitState) -> int:
+    """Printed strength plus any bonuses the active events grant (Pile On's Gang Up)."""
+    strength = attacker.strength
+    if PILE_ON in _active_cards(state, attacker.owner):
+        strength += sum(
+            1
+            for unit in state.units
+            if unit.owner == attacker.owner
+            and unit.unit_id != attacker.unit_id
+            and unit.position.is_adjacent_to(target.position)
+        )
+    return strength
 
 
 def _draw_up_to_hand_size(player_state: PlayerState) -> PlayerState:
@@ -514,7 +705,7 @@ def _end_phase(state: GameState) -> GameState:
         state = _with_player(state, _draw_up_to_hand_size(state.player(state.active)))
         if is_terminal(state):
             return state
-        return replace(
+        state = replace(
             state,
             turn=state.turn + 1,
             active=opponent(state.active),
@@ -522,7 +713,20 @@ def _end_phase(state: GameState) -> GameState:
             moved=(),
             attacked=(),
             attacked_any=False,
+            extra_attackers=(),
         )
+        incoming = state.player(state.active)
+        if incoming.active_events:
+            # "At the start of your next turn, discard all events in your active area" (p.9).
+            state = _with_player(
+                state,
+                replace(
+                    incoming,
+                    active_events=(),
+                    discard=(*incoming.discard, *incoming.active_events),
+                ),
+            )
+        return state
 
     index = _PHASE_ORDER.index(state.phase)
     return replace(state, phase=_PHASE_ORDER[index + 1])
@@ -546,6 +750,8 @@ def step(state: GameState, action: Action) -> GameState:
             return _attack(state, action)
         case DiscardForMagic():
             return _discard_for_magic(state, action)
+        case PlayEvent():
+            return _play_event(state, action)
     raise RulesError(f"unhandled action type: {type(action).__name__}")
 
 

@@ -16,7 +16,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, NotRequired, TypedDict
 
-from sw_core import AttackKind, CardId, DeckId, Square, UnitKind
+from sw_core import AttackKind, CardId, DeckId, Phase, Square, UnitKind
 
 DECK_SIZE: Final[int] = 34
 """Cards in a faction deck, counting the summoner and the two starting units."""
@@ -29,6 +29,10 @@ GATE_COST: Final[int] = 0  # gates are structures and cost no magic
 # 8 events + the 3 five-life gates. The summoner, the ten-life gate and the two starting
 # units are on the board before anyone draws.
 DRAW_PILE_SIZE: Final[int] = DECK_SIZE - 4
+
+COMMON_COPIES: Final[int] = 4  # rulebook p.12: at most 4 of each common
+CHAMPION_COPIES: Final[int] = 1
+EVENT_COPIES: Final[int] = 2  # 3 standard + 1 epic, two copies each, is 8 event slots
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +47,7 @@ class CardDefinition:
     card_class: str = "Common"
     ability_name: str | None = None
     ability: str | None = None
+    phase: Phase | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +70,7 @@ class DeckDefinition:
     layout: StartingLayout
     units: tuple[CardDefinition, ...]
     gates: tuple[CardDefinition, CardDefinition]
+    events: tuple[CardDefinition, ...]
     composition: tuple[CardId, ...]
 
 
@@ -108,6 +114,14 @@ class VerifiedCard(TypedDict):
 
 
 CARDS_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "data" / "cards"
+
+_PHASE_BY_NAME: Final[dict[str, Phase]] = {
+    "Summon Phase": Phase.SUMMON,
+    "Move Phase": Phase.MOVE,
+    "Build Phase": Phase.BUILD,
+    "Attack Phase": Phase.ATTACK,
+    "Magic Phase": Phase.MAGIC,
+}
 
 _ATTACK_BY_NAME: Final[dict[str, AttackKind]] = {
     "melee": AttackKind.MELEE,
@@ -211,15 +225,43 @@ def _build_deck(
         units=starting_units,
     )
 
-    # Real recipe: 16 commons + 3 champions + 8 events + 3 five-life gates. Champions and
-    # events are not modelled yet, so their 11 slots are filled with commons for now; the
-    # gates are already right.
+    event_cards = tuple(
+        CardDefinition(
+            card_id=CardId(entry["id"]),
+            name=entry["name"],
+            kind=UnitKind.EVENT,
+            attack=AttackKind.NONE,
+            cost=entry["cost"] or 0,
+            strength=0,
+            life=0,
+            card_class=entry["card_class"],
+            ability_name=entry.get("ability_name"),
+            ability=entry.get("ability"),
+            phase=_PHASE_BY_NAME.get(entry.get("phase") or ""),
+        )
+        for entry in verified.values()
+        if entry["card_class"].endswith("Event")
+    )
+
+    # Real recipe: 4 copies of each common, 1 of each champion, 2 of each standard event
+    # (epic events print on the summoner card and also come in 2), and 3 five-life gates.
+    # Factions without verified data still use the even spread placeholder.
     composition: list[CardId] = [extra_gate_card.card_id] * 3
-    unit_slots = DRAW_PILE_SIZE - len(composition)
-    per_card, remainder = divmod(unit_slots, len(unit_cards))
-    for index, card in enumerate(unit_cards):
-        copies = per_card + (1 if index < remainder else 0)
-        composition.extend([card.card_id] * copies)
+    commons = [c for c in unit_cards if c.card_class == "Common"]
+    champions = [c for c in unit_cards if c.card_class == "Champion"]
+    if commons and champions and event_cards:
+        for card in commons:
+            composition.extend([card.card_id] * COMMON_COPIES)
+        for card in champions:
+            composition.extend([card.card_id] * CHAMPION_COPIES)
+        for card in event_cards:
+            composition.extend([card.card_id] * EVENT_COPIES)
+    else:
+        unit_slots = DRAW_PILE_SIZE - len(composition)
+        per_card, remainder = divmod(unit_slots, len(unit_cards))
+        for index, card in enumerate(unit_cards):
+            copies = per_card + (1 if index < remainder else 0)
+            composition.extend([card.card_id] * copies)
 
     return DeckDefinition(
         deck_id=DeckId(slug),
@@ -227,6 +269,7 @@ def _build_deck(
         layout=starting_layout,
         units=unit_cards,
         gates=(gate_card, extra_gate_card),
+        events=event_cards,
         composition=tuple(composition),
     )
 
@@ -244,6 +287,10 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
             ("beast_rider", "Beast Rider", AttackKind.MELEE, 2, 3, 3),
             ("horde_climber", "Horde Climber", AttackKind.MELEE, 0, 1, 3),
             ("horde_clinger", "Horde Clinger", AttackKind.MELEE, 2, 2, 2),
+            # Champions: one copy each (rulebook p.12).
+            ("blarf", "Blarf", AttackKind.MELEE, 0, 0, 6),
+            ("smeg", "Smeg", AttackKind.RANGED, 0, 2, 4),
+            ("the_eater", "The Eater", AttackKind.MELEE, 6, 5, 9),
         ),
         layout=((5, 0), (4, 1), ((5, 1), (3, 3))),
     ),
@@ -312,6 +359,7 @@ CARD_INDEX: Final[dict[CardId, CardDefinition]] = {
     for card in (
         deck.layout.summoner[0],
         *deck.gates,
+        *deck.events,
         *deck.units,
     )
 }

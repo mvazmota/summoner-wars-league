@@ -59,12 +59,17 @@ class Phase(Enum):
 
 
 class UnitKind(Enum):
-    """Everything that can stand on the battlefield."""
+    """Card kinds the engine distinguishes.
+
+    `EVENT` never stands on the battlefield: it is played from hand and discarded (or
+    parked in the active area until the start of your next turn).
+    """
 
     SUMMONER = auto()
     UNIT = auto()
     STRUCTURE = auto()
     GATE = auto()
+    EVENT = auto()
 
 
 class AttackKind(Enum):
