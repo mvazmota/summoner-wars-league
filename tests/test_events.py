@@ -424,3 +424,52 @@ def test_gwalark_flies_and_lends_flight_to_nearby_commons() -> None:
     assert reach(gwalark) == 3, "Flight: base 2 plus 1"
     assert reach(common) == 3, "within 2 spaces of Gwalark, so it has Flight"
     assert reach(far_common) == 2, "too far from Gwalark, no Flight"
+
+
+# --------------------------------------------------------------------------------------
+# Deceiver: Stupefy and Engage
+# --------------------------------------------------------------------------------------
+
+DECEIVER: Final[CardId] = CardId("breakers-deceiver")
+
+
+def test_stupefy_costs_the_attacker_one_damage() -> None:
+    target_b = _unit(200, CLIMBER, Square(3, 3), owner=PLAYER_B, life=9)
+    attacker = _unit(100, BEAST_RIDER, Square(3, 2), strength=6)
+    deceiver = _unit(
+        101, DECEIVER, Square(2, 2), owner=PLAYER_B, strength=1, attack=AttackKind.RANGED
+    )
+
+    plain = _battle((attacker, target_b), phase=Phase.ATTACK)
+    with_deceiver = _battle((attacker, target_b, deceiver), phase=Phase.ATTACK)
+
+    plain_after = step(plain, AttackUnit(attacker.unit_id, target_b.unit_id))
+    stupefied = step(with_deceiver, AttackUnit(attacker.unit_id, target_b.unit_id))
+
+    without = next(u for u in plain_after.units if u.unit_id == target_b.unit_id).damage
+    with_penalty = next(u for u in stupefied.units if u.unit_id == target_b.unit_id).damage
+    assert without - with_penalty == 1, f"{without} vs {with_penalty}"
+
+
+def test_engage_damages_a_unit_that_walks_away() -> None:
+    deceiver = _unit(
+        101, DECEIVER, Square(3, 3), owner=PLAYER_B, strength=1, attack=AttackKind.RANGED
+    )
+    walker = _unit(100, CLIMBER, Square(3, 2))
+    state = _battle((walker, deceiver), phase=Phase.MOVE)
+
+    after = step(state, MoveUnit(walker.unit_id, Square(3, 0)))
+
+    assert after.unit(walker.unit_id).damage == 1
+
+
+def test_engage_does_not_fire_when_the_mover_never_stood_beside_it() -> None:
+    deceiver = _unit(
+        101, DECEIVER, Square(0, 7), owner=PLAYER_B, strength=1, attack=AttackKind.RANGED
+    )
+    walker = _unit(100, CLIMBER, Square(3, 2))
+    state = _battle((walker, deceiver), phase=Phase.MOVE)
+
+    after = step(state, MoveUnit(walker.unit_id, Square(3, 0)))
+
+    assert after.unit(walker.unit_id).damage == 0

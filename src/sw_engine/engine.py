@@ -615,6 +615,7 @@ def _move(state: GameState, action: MoveUnit) -> GameState:
     moved_unit = replace(unit, position=action.to)
     units = tuple(moved_unit if u.unit_id == unit.unit_id else u for u in state.units)
     state = replace(state, units=units, moved=(*state.moved, unit.unit_id))
+    state = _apply_engage(state, unit, origin, action.to)
     return _apply_cling(state, unit, origin, action.to)
 
 
@@ -678,6 +679,37 @@ def _apply_damage(state: GameState, target: UnitState, amount: int) -> GameState
     return replace(state, units=tuple(u for u in state.units if u.unit_id != target.unit_id))
 
 
+def _stupefy_penalty(state: GameState, attacker: UnitState) -> bool:
+    """A Deceiver next to the attacker makes every roll count for one less damage."""
+    return any(
+        unit.owner != attacker.owner
+        and unit.kind is UnitKind.UNIT
+        and _has_ability(unit.card, "Stupefy")
+        and unit.position.is_adjacent_to(attacker.position)
+        for unit in state.units
+    )
+
+
+def _apply_engage(
+    state: GameState, mover: UnitState, origin: Square, destination: Square
+) -> GameState:
+    """Engage: leaving a Deceiver's side costs 1 damage."""
+    hit = any(
+        unit.owner != mover.owner
+        and unit.kind is UnitKind.UNIT
+        and _has_ability(unit.card, "Engage")
+        and unit.position.is_adjacent_to(origin)
+        and not unit.position.is_adjacent_to(destination)
+        for unit in state.units
+    )
+    if not hit:
+        return state
+    current = next((u for u in state.units if u.unit_id == mover.unit_id), None)
+    if current is None:
+        return state
+    return _apply_damage(state, current, 1)
+
+
 def _attack(state: GameState, action: AttackUnit) -> GameState:
     attacker = state.unit(action.attacker)
     target = state.unit(action.target)
@@ -687,6 +719,8 @@ def _attack(state: GameState, action: AttackUnit) -> GameState:
     rng = derive_rng(state.seed, state.rng_counter + 1)
     rolls = roll(_effective_strength(state, attacker, target), rng)
     damage = hits(rolls, attacker.attack)
+    if damage > 0 and _stupefy_penalty(state, attacker):
+        damage = max(0, damage - 1)
 
     after = _apply_damage(state, target, damage)
 

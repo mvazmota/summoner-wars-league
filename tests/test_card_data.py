@@ -88,13 +88,20 @@ def test_goblins_have_the_full_roster_of_commons() -> None:
     assert commons == {"Beast Rider", "Horde Slinger", "Horde Climber", "Horde Clinger"}
 
 
-def test_breakers_are_transcribed_but_not_yet_complete() -> None:
+def test_breakers_are_complete() -> None:
     deck = get_deck(DeckId("breakers"))
     assert deck.layout.summoner[0].name == "Taculla"
     assert (deck.layout.summoner[0].life, deck.layout.summoner[0].strength) == (13, 3)
     assert {card.name for card, _ in deck.layout.units} == {"Mind Witch", "Deceiver"}
-    assert not deck.is_complete, "one champion short"
-    assert len(deck.composition) == DRAW_PILE_SIZE - 1
+    assert deck.is_complete
+    assert len(deck.composition) == DRAW_PILE_SIZE
+
+    champions = [card for card in deck.units if card.card_class == "Champion"]
+    assert {card.name for card in champions} == {"Gwalark", "Gulldune", "Halal"}
+
+    deceiver = next(card for card in deck.units if card.name == "Deceiver")
+    assert (deceiver.cost, deceiver.life, deceiver.strength) == (1, 4, 1)
+    assert deceiver.ability_name == "Stupefy / Engage"
 
 
 def test_every_faction_has_a_summoner_with_stats() -> None:

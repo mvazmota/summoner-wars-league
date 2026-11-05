@@ -30,6 +30,8 @@ ledger of which rules run and which are still text on a card.
 | Flight (Gwalark): +1 space and through cards | `engine._movement_profile` |
 | Levitate (Gwalark): friendly commons starting within 2 spaces gain Flight | `engine._movement_profile` |
 | Far Shot (Wind Archer): attacks up to 4 clear straight spaces | `engine._can_attack` |
+| Stupefy (Deceiver): an adjacent enemy's attack deals 1 less damage when it rolls hits | `engine._stupefy_penalty` |
+| Engage (Deceiver): an adjacent enemy that moves away takes 1 damage | `engine._apply_engage` |
 | Pile On — Gang Up (+1 strength per other friendly unit adjacent to the target) | `engine._effective_strength` |
 | Unrelenting (a friendly common that would be destroyed returns to hand) | `engine._apply_damage` |
 | Enrage the Horde (0 cost units resolve an extra attack) | `engine.EFFECT_HANDLERS` |
@@ -47,12 +49,13 @@ All twelve transcribed cards now behave as printed. Two choices are worth knowin
 
 ## Breakers: partially implemented
 
-Transcribed and wired: Swift, Flight, Levitate, Far Shot.
+Transcribed and wired: Swift, Flight, Levitate, Far Shot, Stupefy, Engage.
 
-Transcribed but **not** wired: **Push** (Wind Mage), **Mimic** (Mind Witch), **Mind Capture**
-(Taculla), **Telepathic Command** (Gulldune), and all four events — Mind Control, Hypnotic
-Call, Blast and Perplexing Tempest. They are in `data/cards/breakers.json` and the engine
-ignores them; events are correctly excluded from `legal_actions` because they have no handler.
+Transcribed but **not** wired: **Push** (Wind Mage) and **Greater Push** (Halal) — both need
+a force action that does not exist yet — **Steadfast** (Halal), which only matters once
+forcing exists, **Mimic** (Mind Witch), **Mind Capture** (Taculla), **Telepathic Command**
+(Gulldune), and the four events: Mind Control, Hypnotic Call, Blast and Perplexing Tempest.
+The events are correctly excluded from `legal_actions` because they have no handler.
 
 ## Not implemented yet
 

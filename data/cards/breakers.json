@@ -54,6 +54,18 @@
       "source": "card photo, full resolution"
     },
     {
+      "id": "breakers-halal",
+      "name": "Halal",
+      "card_class": "Champion",
+      "cost": 1,
+      "life": 8,
+      "attack": "ranged",
+      "strength": 4,
+      "ability_name": "Greater Push / Steadfast",
+      "ability": "Greater Push: after this unit attacks, or instead of attacking, it may target a common or champion within 3 spaces and force the target 1 space. Steadfast: this unit cannot be forced.",
+      "source": "card photo, full resolution"
+    },
+    {
       "id": "breakers-wind_archer",
       "name": "Wind Archer",
       "card_class": "Common",
@@ -93,13 +105,13 @@
       "id": "breakers-deceiver",
       "name": "Deceiver",
       "card_class": "Common",
-      "cost": 2,
-      "life": 3,
-      "attack": "melee",
-      "strength": 2,
-      "ability_name": "?",
-      "ability": "Not transcribed: this unit starts on the board (SW Zone setup sheet) but was not photographed yet.",
-      "source": "PLACEHOLDER - starting unit listed by SW Zone, numbers guessed"
+      "cost": 1,
+      "life": 4,
+      "attack": "ranged",
+      "strength": 1,
+      "ability_name": "Stupefy / Engage",
+      "ability": "Stupefy: when an adjacent enemy attacks any card and rolls 1 or more hits, the attack adds 1 less damage. Engage: each time an adjacent enemy unit moves or is forced away from this unit, add 1 damage to that enemy.",
+      "source": "card photo, full resolution"
     },
     {
       "id": "breakers-perplexing_tempest",
