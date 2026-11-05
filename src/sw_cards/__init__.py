@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypedDict
 
 from sw_core import AttackKind, CardId, DeckId, Square, UnitKind
 
@@ -80,19 +80,19 @@ def _card(
     )
 
 
-class VerifiedCard(TypedDict, total=False):
+class VerifiedCard(TypedDict):
     """Shape of one entry in data/cards/<deck>.json."""
 
     id: str
     name: str
     card_class: str
-    cost: int
-    life: int
+    cost: int | None
+    life: int | None
     attack: str
-    strength: int
-    ability_name: str
+    strength: int | None
     ability: str | None
-    source: str
+    ability_name: NotRequired[str]
+    source: NotRequired[str]
 
 
 CARDS_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "data" / "cards"
@@ -122,13 +122,19 @@ def _apply_verified(card: CardDefinition, verified: dict[str, VerifiedCard]) -> 
     entry = verified.get(card.name)
     if entry is None:
         return card
-    attack = _ATTACK_BY_NAME[entry["attack"]]
+    # Events are cards in the deck but never stand on the battlefield, so their life and
+    # strength are null; every other class must carry real numbers.
+    life = entry["life"]
+    strength = entry["strength"]
+    if life is None or strength is None:
+        return card
+    cost = entry["cost"]
     return replace(
         card,
-        cost=entry["cost"],
-        life=entry["life"],
-        strength=entry["strength"],
-        attack=attack,
+        cost=card.cost if cost is None else cost,
+        life=life,
+        strength=strength,
+        attack=_ATTACK_BY_NAME[entry["attack"]],
         card_class=entry.get("card_class", "Common"),
         ability_name=entry.get("ability_name"),
         ability=entry.get("ability"),
@@ -145,8 +151,10 @@ def _build_deck(
     starting: tuple[str, str],
 ) -> DeckDefinition:
     """Build one faction deck from names, placeholder stats and a setup layout."""
-    summoner_card = _card(
-        slug, "summoner", summoner, kind=UnitKind.SUMMONER, cost=0, strength=2, life=12
+    verified = load_verified_cards(DeckId(slug))
+    summoner_card = _apply_verified(
+        _card(slug, "summoner", summoner, kind=UnitKind.SUMMONER, cost=0, strength=2, life=12),
+        verified,
     )
     gate_card = _card(
         slug,
@@ -158,7 +166,6 @@ def _build_deck(
         strength=0,
         life=GATE_LIFE,
     )
-    verified = load_verified_cards(DeckId(slug))
     unit_cards = tuple(
         _apply_verified(
             _card(slug, unit_slug, name, attack=attack, cost=cost, strength=strength, life=life),

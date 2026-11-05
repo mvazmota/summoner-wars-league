@@ -11,6 +11,8 @@ import pytest
 from sw_cards import get_deck, known_decks, load_verified_cards
 from sw_engine.ids import DeckId
 
+BATTLEFIELD_CLASSES = {"Summoner", "Champion", "Common"}
+CARD_CLASSES = BATTLEFIELD_CLASSES | {"Epic Event", "Standard Event"}
 VALID_ATTACKS = {"melee", "ranged", "none"}
 
 
@@ -18,25 +20,55 @@ VALID_ATTACKS = {"melee", "ranged", "none"}
 def test_verified_entries_are_well_formed(deck_id: DeckId) -> None:
     for name, entry in load_verified_cards(deck_id).items():
         assert entry["id"].startswith(f"{deck_id}-"), f"{name}: id must be namespaced by faction"
-        assert 0 <= entry["cost"] <= 12, f"{name}: implausible cost"
-        assert 1 <= entry["life"] <= 15, f"{name}: implausible life"
-        assert 0 <= entry["strength"] <= 8, f"{name}: implausible strength"
+        assert entry["card_class"] in CARD_CLASSES, f"{name}: unknown class"
         assert entry["attack"] in VALID_ATTACKS, f"{name}: unknown attack kind"
-        if entry.get("ability_name"):
-            assert "ability" in entry, f"{name}: named ability without text or explicit null"
+        assert entry.get("ability"), f"{name}: transcribed without ability text"
+
+        if entry["card_class"] in BATTLEFIELD_CLASSES:
+            cost = entry["cost"]
+            life = entry["life"]
+            strength = entry["strength"]
+            assert cost is None or 0 <= cost <= 12, f"{name}: implausible cost"
+            assert isinstance(life, int) and 1 <= life <= 15, f"{name}: implausible life"
+            assert isinstance(strength, int) and 0 <= strength <= 8, f"{name}: implausible strength"
+        else:
+            assert entry["life"] is None and entry["strength"] is None, (
+                f"{name}: events never have life or strength"
+            )
+            assert entry["attack"] == "none", f"{name}: events never attack"
+            assert isinstance(entry["cost"], int), f"{name}: events always cost magic"
 
 
-def test_every_transcribed_card_exists_in_its_deck() -> None:
+def test_every_transcribed_card_is_known_to_the_project() -> None:
     """A typo in the card name would silently fall back to placeholder stats."""
-    verified = load_verified_cards(DeckId("cave_goblins"))
-    names = {card.name for card in get_deck(DeckId("cave_goblins")).units}
-    for name in verified:
-        assert name in names, f"{name} is transcribed but not present in the deck definition"
+    deck = get_deck(DeckId("cave_goblins"))
+    known = {card.name for card in deck.units} | {deck.layout.summoner[0].name}
+    # Champions and events are transcribed but not modelled by the engine yet.
+    unmodelled = {"Blarf", "Smeg", "The Eater"} | {
+        name
+        for name, entry in load_verified_cards(DeckId("cave_goblins")).items()
+        if entry["card_class"].endswith("Event")
+    }
+    for name in load_verified_cards(DeckId("cave_goblins")):
+        assert name in known or name in unmodelled, f"{name} is transcribed but unknown"
 
 
 def test_transcribed_stats_reach_the_engine() -> None:
     deck = get_deck(DeckId("cave_goblins"))
     by_name = {card.name: card for card in deck.units}
+
     slinger = by_name["Horde Slinger"]
     assert (slinger.cost, slinger.life, slinger.strength) == (0, 1, 2)
     assert slinger.ability_name == "Relentless"
+
+    summoner = deck.layout.summoner[0]
+    assert (summoner.name, summoner.life, summoner.strength) == ("Sneeks", 11, 3)
+
+
+def test_goblins_have_the_full_roster_of_commons() -> None:
+    commons = {
+        name
+        for name, entry in load_verified_cards(DeckId("cave_goblins")).items()
+        if entry["card_class"] == "Common"
+    }
+    assert commons == {"Beast Rider", "Horde Slinger", "Horde Climber", "Horde Clinger"}
