@@ -11,7 +11,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sw_core", "src/sw_engine", "src/sw_cards"]
+packages = ["src/sw_core", "src/sw_engine", "src/sw_cards", "src/sw_league"]
 
 [dependency-groups]
 dev = [

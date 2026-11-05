@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summoner Wars — simulador</title>
+<style>
+  :root {
+    --bg: #12100e; --panel: #1c1916; --ink: #efe7dc; --muted: #9c9186;
+    --a: #4f9dd4; --b: #d4734f; --board: #2a241f; --line: #3a322b; --gold: #d9c37a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+    padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 15px; margin: 0; letter-spacing: .06em; text-transform: uppercase; }
+  .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+  main { padding: 20px; }
+  button { background: #2a2420; color: var(--ink); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; }
+  button:hover { background: #342c26; }
+  button.primary { background: #3b2f22; border-color: var(--gold); color: #ffeec4; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  select, input { background: #221d19; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; font: inherit; }
+
+  /* setup */
+  #setup { max-width: 720px; margin: 30px auto; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  #setup h2 { margin: 0 0 4px; font-size: 17px; }
+  #setup p.sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: end; }
+  .row + .row { margin-top: 16px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px;
+    text-transform: uppercase; letter-spacing: .06em; }
+  .vs { padding-bottom: 9px; color: var(--muted); font-size: 12px; }
+  .badge { display: inline-block; font-size: 11px; border: 1px solid var(--line);
+    border-radius: 999px; padding: 1px 7px; color: var(--muted); margin-left: 6px; }
+  .badge.ok { border-color: #4b6b4b; color: #a8d3a8; }
+
+  /* stage */
+  #stage { display: none; grid-template-columns: minmax(300px, 520px) 1fr; gap: 20px; }
+  @media (max-width: 900px) { #stage { grid-template-columns: 1fr; } }
+  .board { display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 1fr);
+    gap: 4px; aspect-ratio: 6 / 8; background: var(--board); padding: 8px;
+    border-radius: 10px; border: 1px solid var(--line); }
+  .cell { position: relative; border-radius: 6px; background: #221d19;
+    border: 1px solid #332c26; min-height: 32px; overflow: hidden; }
+  .cell.side-a { background: #1d232a; border-color: #2b3946; }
+  .cell.side-b { background: #2a221d; border-color: #46352b; }
+  .unit { position: absolute; inset: 2px; border-radius: 5px; padding: 2px 3px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-size: 10px; line-height: 1.1; cursor: pointer; overflow: hidden; }
+  .unit.a { background: #234a63; border: 1px solid var(--a); color: #e8f4ff; }
+  .unit.b { background: #63372a; border: 1px solid var(--b); color: #ffece4; }
+  .unit.summoner { box-shadow: 0 0 0 2px var(--gold) inset; }
+  .unit.gate { background: #2f2a22; border: 1px dashed #8b7a5c; color: #cbbf9f; }
+  .unit .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .unit .stats { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .unit .dmg { color: #ffb3a7; }
+
+  .panel { display: grid; gap: 14px; align-content: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .card h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--muted); }
+  .turnbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+  .pill.a { border-color: var(--a); color: #cfe8fb; }
+  .pill.b { border-color: var(--b); color: #ffe1d6; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=range] { flex: 1; min-width: 140px; accent-color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 3px 0; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  .zone { color: var(--muted); font-size: 12px; }
+  .hand span { display: inline-block; background: #262019; border: 1px solid var(--line);
+    border-radius: 6px; padding: 2px 7px; margin: 2px 4px 2px 0; font-size: 12px; }
+
+  /* end screen */
+  #end { position: fixed; inset: 0; background: rgba(9, 8, 7, .88); display: none;
+    align-items: center; justify-content: center; padding: 20px; z-index: 20; overflow: auto; }
+  #end.show { display: flex; }
+  .sheet { width: min(760px, 100%); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .sheet .winner { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+  .sheet h2 { margin: 6px 0 2px; font-size: 26px; }
+  .sheet .verdict { margin: 12px 0 18px; color: #ddd2c4; }
+  .sheet ul { margin: 0 0 18px; padding-left: 18px; }
+  .sheet li { margin-bottom: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin-bottom: 20px; }
+  .stat { background: #221d19; border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .sheet .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Summoner Wars — simulador</h1>
+  <span class="meta" id="meta"></span>
+  <button id="newgame" hidden>novo jogo</button>
+</header>
+
+<main>
+  <section id="setup">
+    <h2>Escolhe o matchup</h2>
+    <p class="sub">O bot joga dos dois lados com uma política simples. Cada jogo é reproduzível
+      a partir da seed.</p>
+    <div class="row">
+      <div>
+        <label for="deckA">Jogador A</label>
+        <select id="deckA"></select>
+      </div>
+      <div class="vs">vs</div>
+      <div>
+        <label for="deckB">Jogador B</label>
+        <select id="deckB"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="seed">Seed (opcional)</label>
+        <input id="seed" type="number" placeholder="aleatória" min="1">
+      </div>
+      <div></div>
+      <div style="text-align:right">
+        <button class="primary" id="run">Simular jogo</button>
+      </div>
+    </div>
+    <p class="sub" id="setupmsg" style="margin-top:14px"></p>
+  </section>
+
+  <section id="stage">
+    <div>
+      <div class="board" id="board"></div>
+      <div class="zone" style="margin-top:8px">A em baixo, B em cima.</div>
+    </div>
+    <div class="panel">
+      <div class="card">
+        <div class="turnbar">
+          <span class="pill" id="turn"></span>
+          <span class="pill" id="phase"></span>
+          <span class="pill" id="active"></span>
+        </div>
+        <p id="action" style="margin:10px 0 0; font-size:15px"></p>
+      </div>
+      <div class="card">
+        <div class="controls">
+          <button id="play">❚❚</button>
+          <button id="prev">◀</button>
+          <button id="next">▶</button>
+          <input type="range" id="slider" min="0" value="0">
+          <span class="zone" id="counter"></span>
+        </div>
+        <div class="controls" style="margin-top:8px">
+          <label class="zone">velocidade
+            <select id="speed">
+              <option value="800">lenta</option>
+              <option value="320" selected>normal</option>
+              <option value="110">rápida</option>
+            </select>
+          </label>
+          <button id="skip" style="margin-left:auto">saltar para o fim</button>
+        </div>
+      </div>
+      <div class="card"><h2>Estado</h2><table id="players"></table></div>
+      <div class="card"><h2>Detalhe da carta</h2><div class="zone" id="details">Clica numa carta no tabuleiro.</div></div>
+    </div>
+  </section>
+</main>
+
+<div id="end">
+  <div class="sheet">
+    <div class="winner" id="endWinner"></div>
+    <h2 id="endTitle"></h2>
+    <p class="verdict" id="endVerdict"></p>
+    <ul id="endHighlights"></ul>
+    <div class="stats" id="endStats"></div>
+    <div class="actions">
+      <button class="primary" id="replay">Ver outra vez</button>
+      <button id="another">Novo matchup</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var state = { frames: [], report: null, meta: null, index: 0, timer: null };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var board = $("board"), slider = $("slider"), end = $("end");
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  // ---------------- setup ----------------
+  fetch("/api/decks").then(function (r) { return r.json(); }).then(function (data) {
+    var a = $("deckA"), b = $("deckB");
+    data.decks.forEach(function (deck) {
+      [a, b].forEach(function (select) {
+        var option = el("option", null, deck.faction);
+        option.value = deck.id;
+        select.appendChild(option);
+      });
+    });
+    if (data.decks.length > 1) b.selectedIndex = 1;
+    var verified = data.decks.filter(function (d) { return d.verified; }).length;
+    $("setupmsg").textContent = data.decks.length + " decks disponíveis, " + verified +
+      " com cartas verificadas. Decks sem dados verificados usam stats provisórios.";
+  });
+
+  $("run").addEventListener("click", function () {
+    var button = $("run");
+    button.disabled = true;
+    button.textContent = "a simular…";
+    var seedInput = $("seed").value.trim();
+    var url = "/api/game?deck_a=" + encodeURIComponent($("deckA").value) +
+      "&deck_b=" + encodeURIComponent($("deckB").value) +
+      (seedInput ? "&seed=" + encodeURIComponent(seedInput) : "");
+
+    fetch(url).then(function (r) {
+      return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+    }).then(function (result) {
+      button.disabled = false;
+      button.textContent = "Simular jogo";
+      if (!result.ok) { alert(result.body.error || "erro"); return; }
+      start(result.body);
+    }).catch(function (error) {
+      button.disabled = false;
+      button.textContent = "Simular jogo";
+      alert("falhou: " + error);
+    });
+  });
+
+  // ---------------- playback ----------------
+  function start(payload) {
+    state.frames = payload.frames;
+    state.report = payload.report;
+    state.meta = payload.meta;
+    state.index = 0;
+
+    $("setup").style.display = "none";
+    $("stage").style.display = "grid";
+    $("newgame").hidden = false;
+    end.classList.remove("show");
+
+    $("meta").textContent = payload.meta.faction_a + " vs " + payload.meta.faction_b +
+      " · seed " + payload.meta.seed;
+    slider.max = String(state.frames.length - 1);
+    render();
+    autoplay();
+  }
+
+  function render() {
+    var frame = state.frames[state.index];
+    var snap = frame.state;
+    renderBoard(snap);
+    renderPlayers(snap);
+
+    $("turn").textContent = "turno " + snap.turn;
+    $("phase").textContent = snap.phase.toLowerCase();
+    var active = $("active");
+    active.textContent = "joga: " + (snap.active === 0 ? "A" : "B");
+    active.className = "pill " + (snap.active === 0 ? "a" : "b");
+    $("action").textContent = frame.label;
+
+    slider.value = String(state.index);
+    $("counter").textContent = (state.index + 1) + " / " + state.frames.length;
+    $("prev").disabled = state.index === 0;
+    $("next").disabled = state.index === state.frames.length - 1;
+  }
+
+  function renderBoard(snap) {
+    board.textContent = "";
+    var bySquare = {};
+    snap.units.forEach(function (unit) { bySquare[unit.x + "," + unit.y] = unit; });
+    for (var row = 0; row < 8; row++) {
+      for (var col = 0; col < 6; col++) {
+        var y = 7 - row;
+        var cell = el("div", "cell side-" + (y < 4 ? "a" : "b"));
+        var unit = bySquare[col + "," + y];
+        if (unit) cell.appendChild(renderUnit(unit));
+        board.appendChild(cell);
+      }
+    }
+  }
+
+  function renderUnit(unit) {
+    var cls = "unit " + (unit.owner === 0 ? "a" : "b");
+    if (unit.kind === "SUMMONER") cls += " summoner";
+    if (unit.kind === "GATE" || unit.kind === "STRUCTURE") cls += " gate";
+    var node = el("div", cls);
+    node.appendChild(el("div", "name", unit.name + (unit.boosts ? " +" + unit.boosts : "")));
+    var stats = el("div", "stats");
+    stats.appendChild(el("span", "dmg", (unit.life - unit.damage) + "/" + unit.life));
+    stats.appendChild(el("span", null, unit.kind === "GATE" ? "gate" : String(unit.strength + unit.boosts)));
+    node.appendChild(stats);
+    node.addEventListener("click", function () { showDetails(unit); });
+    return node;
+  }
+
+  function showDetails(unit) {
+    var rows = [
+      ["carta", unit.name], ["classe", unit.card_class], ["tipo", unit.kind],
+      ["dono", unit.owner === 0 ? "A" : "B"], ["casa", unit.position],
+      ["vida", (unit.life - unit.damage) + " de " + unit.life],
+      ["ataque", unit.attack], ["força", unit.strength + (unit.boosts ? " (+" + unit.boosts + ")" : "")]
+    ];
+    var html = "<table>";
+    rows.forEach(function (row) { html += "<tr><th>" + row[0] + "</th><td>" + row[1] + "</td></tr>"; });
+    $("details").innerHTML = html + "</table>";
+  }
+
+  function renderPlayers(snap) {
+    var table = $("players");
+    table.textContent = "";
+    var head = document.createElement("tr");
+    ["", "A", "B"].forEach(function (t) { head.appendChild(el("th", null, t)); });
+    table.appendChild(head);
+    function row(title, values) {
+      var tr = document.createElement("tr");
+      tr.appendChild(el("th", null, title));
+      values.forEach(function (value) { tr.appendChild(el("td", null, value)); });
+      table.appendChild(tr);
+    }
+    var a = snap.players[0], b = snap.players[1];
+    row("magia", [a.magic, b.magic]);
+    row("vida do summoner", [a.summoner_life, b.summoner_life]);
+    row("deck / descarte", [a.deck + " / " + a.discard, b.deck + " / " + b.discard]);
+    row("eventos activos", [a.active_events.join(", ") || "—", b.active_events.join(", ") || "—"]);
+    [a, b].forEach(function (seat) {
+      var tr = document.createElement("tr");
+      tr.appendChild(el("th", null, "mão"));
+      var td = document.createElement("td");
+      td.colSpan = 2;
+      var wrap = el("div", "hand");
+      if (!seat.hand.length) wrap.appendChild(el("span", "zone", "vazia"));
+      seat.hand.forEach(function (name) { wrap.appendChild(el("span", null, name)); });
+      td.appendChild(wrap);
+      tr.appendChild(td);
+      table.appendChild(tr);
+    });
+  }
+
+  function stop() {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    $("play").textContent = "▶";
+  }
+
+  function autoplay() {
+    stop();
+    $("play").textContent = "❚❚";
+    var delay = parseInt($("speed").value, 10);
+    state.timer = setInterval(function () {
+      if (state.index >= state.frames.length - 1) { stop(); finish(); return; }
+      state.index += 1;
+      render();
+      if (state.index === state.frames.length - 1) { stop(); finish(); }
+    }, delay);
+  }
+
+  $("play").addEventListener("click", function () {
+    if (state.timer) { stop(); return; }
+    if (state.index >= state.frames.length - 1) { state.index = 0; render(); }
+    autoplay();
+  });
+  $("prev").addEventListener("click", function () { stop(); state.index = Math.max(0, state.index - 1); render(); });
+  $("next").addEventListener("click", function () {
+    stop();
+    state.index = Math.min(state.frames.length - 1, state.index + 1);
+    render();
+    if (state.index === state.frames.length - 1) finish();
+  });
+  $("skip").addEventListener("click", function () {
+    stop(); state.index = state.frames.length - 1; render(); finish();
+  });
+  slider.addEventListener("input", function () {
+    stop(); state.index = parseInt(slider.value, 10); render();
+    if (state.index === state.frames.length - 1) finish();
+  });
+  document.addEventListener("keydown", function (event) {
+    if ($("stage").style.display === "none") return;
+    if (event.key === "ArrowLeft") { stop(); state.index = Math.max(0, state.index - 1); render(); }
+    if (event.key === "ArrowRight") { stop(); state.index = Math.min(state.frames.length - 1, state.index + 1); render(); }
+    if (event.key === " ") { event.preventDefault(); $("play").click(); }
+  });
+
+  // ---------------- end screen ----------------
+  function finish() {
+    var report = state.report;
+    if (!report) return;
+
+    var winnerName = report.winner ? report.factions[report.winner] : null;
+    $("endWinner").textContent = winnerName ? "vencedor" : "sem vencedor";
+    $("endTitle").textContent = winnerName || "Empate";
+    $("endVerdict").textContent = report.verdict;
+
+    var list = $("endHighlights");
+    list.textContent = "";
+    report.highlights.forEach(function (item) { list.appendChild(el("li", null, item)); });
+
+    var stats = $("endStats");
+    stats.textContent = "";
+    var cards = [
+      ["turnos", report.turns],
+      ["acções", report.actions],
+      ["seed", report.seed],
+      ["vida A / B", report.life_left.A + " / " + report.life_left.B],
+      ["dano ao summoner A", report.summoner_damage.A],
+      ["dano ao summoner B", report.summoner_damage.B],
+      ["unidades invocadas", report.units_summoned.A + " / " + report.units_summoned.B],
+      ["unidades perdidas", report.units_lost.A + " / " + report.units_lost.B],
+      ["eventos jogados", report.events_played.A + " / " + report.events_played.B],
+      ["magia gasta", report.magic_spent.A + " / " + report.magic_spent.B]
+    ];
+    cards.forEach(function (card) {
+      var box = el("div", "stat");
+      box.appendChild(el("b", null, String(card[1])));
+      box.appendChild(el("span", null, card[0]));
+      stats.appendChild(box);
+    });
+
+    end.classList.add("show");
+  }
+
+  $("replay").addEventListener("click", function () {
+    end.classList.remove("show");
+    state.index = 0;
+    render();
+    autoplay();
+  });
+  $("another").addEventListener("click", function () {
+    end.classList.remove("show");
+    stop();
+    $("stage").style.display = "none";
+    $("setup").style.display = "block";
+    $("newgame").hidden = true;
+    $("meta").textContent = "";
+  });
+  $("newgame").addEventListener("click", function () { $("another").click(); });
+})();
+</script>
+</body>
+</html>

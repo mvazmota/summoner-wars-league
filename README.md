@@ -8,6 +8,23 @@ agent-style effects, and marginal value of individual units.
 interfaces, determinism rules, milestones M0–M5 with acceptance criteria, testing and statistics
 rules, and the things not to do.
 
+## Pick a matchup and watch it
+
+```bash
+uv run python scripts/serve.py --port 8765
+```
+
+Open `http://<this machine>:8765/`. The page lists every deck, lets you choose player A and
+player B, runs the game on the server and plays it back on the board. When the game ends an
+**end screen** appears with the verdict, the highlights and the numbers behind them (turns,
+summoner life, damage, summons, losses, events, magic spent, biggest hit).
+
+The whole thing is stdlib only: `http.server` for the API (`/api/decks`, `/api/game`) and
+plain JavaScript for the page. No Flask, no build step, no network access.
+
+`scripts/visualize.py` still writes a single self-contained HTML file per game, which is
+handy for sharing a specific replay offline.
+
 ## Watch a game
 
 ```bash
