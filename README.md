@@ -10,7 +10,18 @@ rules, and the things not to do.
 
 ## Status
 
-Scaffolding only. No engine, no cards, no agents yet. Current milestone: **M0 — skeleton**.
+**M0 complete** — typed engine surface, determinism guard, solver-independent rules contract.
+No real cards and no agents yet. Next milestone: **M1 — rules core (one faction vs itself)**.
+
+Verified on this machine:
+
+```bash
+uv sync
+uv run ruff check . && uv run ruff format --check .
+uv run mypy
+uv run pytest -m "not slow"       # 17 passed
+uv run python -m sw_engine.smoke  # prints the canonical state hash
+```
 
 ## Layout
 
