@@ -465,4 +465,6 @@ def test_draw_pile_holds_three_five_life_gates(deck_id: DeckId) -> None:
     extra = deck.gates[1]
     assert deck.composition.count(extra.card_id) == 3
     assert deck.composition.count(deck.gates[0].card_id) == 0, "the starting gate is not drawn"
-    assert len(deck.composition) == DRAW_PILE_SIZE
+    assert len(deck.composition) <= DRAW_PILE_SIZE
+    if deck.is_complete:
+        assert len(deck.composition) == DRAW_PILE_SIZE

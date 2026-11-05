@@ -23,12 +23,15 @@ Card names below were verified against SW Zone's per-faction setup sheets
 | Fallen Kingdom | Ret-Talus (4,0) | (4,2) | Archer (3,1) | Carrier (3,2) | confirmed |
 | Polar Dwarves | Svara (4,0) | (4,2) | Ice Golem (3,1) | Frost Mage (3,2) | confirmed |
 
-## Open conflict: Shadow Elves
+## Resolved: the Mind Witch photo was the Breakers
 
-The photo shows **Mind Witch** and **Deceiver** as the two starting units, and the owner
-confirmed those positions. SW Zone's setup sheet for Shadow Elves lists **Sage Ranger** and
-**Shadow Mage** instead. One of the two sources is wrong (or describes a different printing),
-so the engine currently follows the photo. Needs resolving before card stats are encoded.
+The photo that put **Mind Witch** and **Deceiver** on the board was filed under Shadow Elves,
+but both cards are printed as **Breakers** commons and SW Zone's Breakers setup sheet lists
+exactly those two. The layout `(3,0) Taculla · (4,1) gate · (3,1) Mind Witch · (5,3) Deceiver`
+therefore belongs to the Breakers deck.
+
+Shadow Elves start with **Sage Ranger** and **Shadow Mage**; there is no photo of that
+summoner card yet, so its layout is a shape-alike, not a transcription.
 
 ## Invariants every layout must satisfy
 

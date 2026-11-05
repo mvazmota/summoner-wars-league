@@ -48,7 +48,7 @@ def test_deck_catalogue_lists_every_deck(base_url: str) -> None:
     ids = {deck["id"] for deck in decks}
     assert "cave_goblins" in ids
     verified = {deck["id"] for deck in decks if deck["verified"]}
-    assert verified == {"cave_goblins"}, "only the goblins have verified card data"
+    assert verified == {"cave_goblins", "breakers"}, "factions with transcribed events"
 
 
 def test_game_endpoint_returns_frames_and_a_report(base_url: str) -> None:

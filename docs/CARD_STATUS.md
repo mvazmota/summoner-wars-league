@@ -32,6 +32,29 @@ structure with cost 0 and 10 life, the other three cost 0 and have 5 life each.
 
 Cave Goblins is therefore **complete: 34 of 34 cards**.
 
+## Breakers — 10 of 12 distinct cards
+
+Starting setup per SW Zone: **Mind Witch** and **Deceiver**. That photo was originally filed
+under Shadow Elves, which is wrong: Mind Witch and Deceiver belong to the Breakers, and the
+Shadow Elves start with Sage Ranger and Shadow Mage.
+
+| Card | Class | Cost | Life | Attack | Ability | Ability text |
+| --- | --- | --- | --- | --- | --- | --- |
+| Taculla | Summoner | — | 13 | 3 melee | Mind Capture | yes |
+| Gwalark | Champion | 6 | 8 | 3 melee | Flight / Levitate | yes |
+| Gulldune | Champion | 6 | 6 | 4 melee | Telepathic Command | yes |
+| Wind Archer | Common | 2 | 2 | 4 ranged | Swift / Far Shot | yes |
+| Wind Mage | Common | 1 | 3 | 2 ranged | Push | yes |
+| Mind Witch | Common | 1 | 2 | 3 ranged | Mimic | yes |
+| Deceiver | Common | 2 | 3 | 2 melee | **unknown** | no — never photographed |
+| Mind Control | Epic Event (Summon Phase) | 0 | — | — | — | yes |
+| Hypnotic Call | Standard Event (Summon Phase) | 0 | — | — | Active | yes |
+| Blast | Standard Event (Move Phase) | 1 | — | — | — | yes |
+| Perplexing Tempest | Standard Event (Magic Phase) | 0 | — | — | Active | yes |
+
+Missing: **one champion** (the deck holds three) and the **Deceiver's** real numbers and
+ability. The draw pile is 29 of 30 cards, which is why `is_complete` is false for this deck.
+
 ## Still placeholders
 
 - Every other faction: all cards

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from sw_cards import get_deck, known_decks, load_verified_cards
+from sw_cards import DRAW_PILE_SIZE, get_deck, known_decks, load_verified_cards
 from sw_engine.ids import DeckId
 
 BATTLEFIELD_CLASSES = {"Summoner", "Champion", "Common"}
@@ -86,3 +86,20 @@ def test_goblins_have_the_full_roster_of_commons() -> None:
         if entry["card_class"] == "Common"
     }
     assert commons == {"Beast Rider", "Horde Slinger", "Horde Climber", "Horde Clinger"}
+
+
+def test_breakers_are_transcribed_but_not_yet_complete() -> None:
+    deck = get_deck(DeckId("breakers"))
+    assert deck.layout.summoner[0].name == "Taculla"
+    assert (deck.layout.summoner[0].life, deck.layout.summoner[0].strength) == (13, 3)
+    assert {card.name for card, _ in deck.layout.units} == {"Mind Witch", "Deceiver"}
+    assert not deck.is_complete, "one champion short"
+    assert len(deck.composition) == DRAW_PILE_SIZE - 1
+
+
+def test_every_faction_has_a_summoner_with_stats() -> None:
+    for deck_id in known_decks():
+        deck = get_deck(deck_id)
+        summoner = deck.layout.summoner[0]
+        assert summoner.life >= 8, f"{deck_id}: summoned with implausible life"
+        assert summoner.strength >= 1

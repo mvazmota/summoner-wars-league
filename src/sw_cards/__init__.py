@@ -72,6 +72,7 @@ class DeckDefinition:
     gates: tuple[CardDefinition, CardDefinition]
     events: tuple[CardDefinition, ...]
     composition: tuple[CardId, ...]
+    is_complete: bool = False
 
 
 def _card(
@@ -249,7 +250,8 @@ def _build_deck(
     composition: list[CardId] = [extra_gate_card.card_id] * 3
     commons = [c for c in unit_cards if c.card_class == "Common"]
     champions = [c for c in unit_cards if c.card_class == "Champion"]
-    if commons and champions and event_cards:
+    recipe_known = bool(commons and champions and event_cards)
+    if recipe_known:
         for card in commons:
             composition.extend([card.card_id] * COMMON_COPIES)
         for card in champions:
@@ -271,6 +273,9 @@ def _build_deck(
         gates=(gate_card, extra_gate_card),
         events=event_cards,
         composition=tuple(composition),
+        # A padded placeholder pile is not a complete deck: the numbers are invented until
+        # the faction's cards are transcribed, so it must never be reported as complete.
+        is_complete=recipe_known and len(composition) == DRAW_PILE_SIZE,
     )
 
 
@@ -297,11 +302,29 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "shadow_elves",
         "Shadow Elves",
+        starting=("sage_ranger", "shadow_mage"),
+        summoner="Selundar",
+        units=(
+            ("sage_ranger", "Sage Ranger", AttackKind.RANGED, 2, 2, 2),
+            ("shadow_mage", "Shadow Mage", AttackKind.RANGED, 2, 2, 3),
+        ),
+        # TODO(layout): no photo of the Shadow Elves summoner card yet; this is the same
+        # shape as the printed layout, not a verified transcription.
+        layout=((3, 0), (4, 1), ((3, 1), (5, 3))),
+    ),
+
+    _build_deck(
+        "breakers",
+        "Breakers",
         starting=("mind_witch", "deceiver"),
         summoner="Taculla",
         units=(
-            ("mind_witch", "Mind Witch", AttackKind.RANGED, 1, 2, 2),
-            ("deceiver", "Deceiver", AttackKind.MELEE, 3, 4, 3),
+            ("wind_archer", "Wind Archer", AttackKind.RANGED, 2, 4, 2),
+            ("wind_mage", "Wind Mage", AttackKind.RANGED, 1, 2, 3),
+            ("mind_witch", "Mind Witch", AttackKind.RANGED, 1, 3, 2),
+            ("deceiver", "Deceiver", AttackKind.MELEE, 2, 2, 3),
+            ("gwalark", "Gwalark", AttackKind.MELEE, 6, 3, 8),
+            ("gulldune", "Gulldune", AttackKind.MELEE, 6, 4, 6),
         ),
         layout=((3, 0), (4, 1), ((3, 1), (5, 3))),
     ),
