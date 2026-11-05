@@ -26,6 +26,10 @@ ledger of which rules run and which are still text on a card.
 | Blood Runes / Imbued Strength (start of Attack Phase: 1 magic for a boost, else 1 damage; +1 strength per boost, max +5) | `engine._start_of_attack_phase` |
 | Magic Junkie (end of turn: pay 1 magic or be discarded) | `engine._end_of_turn_triggers` |
 | Feed the Eater (end of Attack Phase without a kill: discard a neighbour or itself) | `engine._end_of_attack_phase` |
+| Swift (Wind Archer, Wind Mage): +1 space | `engine._movement_profile` |
+| Flight (Gwalark): +1 space and through cards | `engine._movement_profile` |
+| Levitate (Gwalark): friendly commons starting within 2 spaces gain Flight | `engine._movement_profile` |
+| Far Shot (Wind Archer): attacks up to 4 clear straight spaces | `engine._can_attack` |
 | Pile On — Gang Up (+1 strength per other friendly unit adjacent to the target) | `engine._effective_strength` |
 | Unrelenting (a friendly common that would be destroyed returns to hand) | `engine._apply_damage` |
 | Enrage the Horde (0 cost units resolve an extra attack) | `engine.EFFECT_HANDLERS` |
@@ -40,6 +44,15 @@ All twelve transcribed cards now behave as printed. Two choices are worth knowin
   space has none yet. This can only make the Clinger better than a human would play it.
 - **Cling follows only the unit that moved.** Several Clingers can chain off one move, but a
   unit that starts adjacent to two Clingers drags both.
+
+## Breakers: partially implemented
+
+Transcribed and wired: Swift, Flight, Levitate, Far Shot.
+
+Transcribed but **not** wired: **Push** (Wind Mage), **Mimic** (Mind Witch), **Mind Capture**
+(Taculla), **Telepathic Command** (Gulldune), and all four events — Mind Control, Hypnotic
+Call, Blast and Perplexing Tempest. They are in `data/cards/breakers.json` and the engine
+ignores them; events are correctly excluded from `legal_actions` because they have no handler.
 
 ## Not implemented yet
 

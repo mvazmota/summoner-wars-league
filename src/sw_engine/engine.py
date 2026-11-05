@@ -60,6 +60,7 @@ RANGED_RANGE = 3
 # Rulebook p.7: a unit moves 1 or 2 spaces per Move Phase.
 MAX_MOVE_DISTANCE = 2
 CHARGE_DISTANCE = 4  # Beast Rider: may move 1 to 4 clear straight spaces instead
+FAR_SHOT_RANGE = 4  # Wind Archer: may attack 4 clear straight spaces away
 MAX_BOOSTS = 5  # Blarf: +1 strength per boost, never more than +5
 
 
@@ -334,7 +335,7 @@ def _build_squares(state: GameState, player: PlayerId) -> list[Square]:
 
 
 def _path_is_clear(
-    state: GameState, origin: Square, target: Square, *, through_structures: bool = False
+    state: GameState, origin: Square, target: Square, *, through_cards: bool = False
 ) -> bool:
     """True when every space strictly between origin and target is empty.
 
@@ -347,10 +348,8 @@ def _path_is_clear(
     x, y = origin.x + step_x, origin.y + step_y
     while (x, y) != (target.x, target.y):
         blocker = state.occupant(Square(x, y))
-        if blocker is not None:
-            passes = through_structures and blocker.kind in (UnitKind.STRUCTURE, UnitKind.GATE)
-            if not passes:
-                return False
+        if blocker is not None and not through_cards:
+            return False
         x += step_x
         y += step_y
     return True
@@ -370,6 +369,41 @@ def _has_ability(card_id: CardId, keyword: str) -> bool:
     return keyword.lower() in haystack
 
 
+def _card_class(card_id: CardId) -> str:
+    """Card class, or "Unknown" for synthetic units built by tests."""
+    try:
+        return get_card(card_id).card_class
+    except KeyError:
+        return "Unknown"
+
+
+def _movement_profile(state: GameState, unit: UnitState) -> tuple[int, bool]:
+    """How far a unit may move and whether it passes through cards.
+
+    Climb and Flight both add a space and let the mover pass cards; Swift adds a space on
+    top; Levitate lends Flight to friendly commons that start within 2 spaces of the carrier.
+    """
+    limit = MAX_MOVE_DISTANCE
+    through_cards = False
+    if _has_ability(unit.card, "Climb") or _has_ability(unit.card, "Flight"):
+        limit += 1
+        through_cards = True
+    if _has_ability(unit.card, "Swift"):
+        limit += 1
+
+    if _card_class(unit.card) == "Common":
+        for other in state.units:
+            if other.owner != unit.owner or other.unit_id == unit.unit_id:
+                continue
+            if not _has_ability(other.card, "Levitate"):
+                continue
+            if other.position.distance_to(unit.position) <= 2:
+                limit += 1
+                through_cards = True
+                break
+    return limit, through_cards
+
+
 def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -> bool:
     if unit.owner != player or not unit.can_move():
         return False
@@ -380,13 +414,12 @@ def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -
     if not to.is_on_board() or not state.is_empty(to):
         return False
     distance = unit.position.distance_to(to)
-    climb = _has_ability(unit.card, "Climb")
-    limit = CHARGE_DISTANCE if _has_ability(unit.card, "Charge") else MAX_MOVE_DISTANCE
-    if climb:
-        limit += 1
+    limit, through_cards = _movement_profile(state, unit)
+    if _has_ability(unit.card, "Charge"):
+        limit = max(limit, CHARGE_DISTANCE)
     if distance < 1 or distance > limit:
         return False
-    return _path_is_clear(state, unit.position, to, through_structures=climb)
+    return _path_is_clear(state, unit.position, to, through_cards=through_cards)
 
 
 def _can_attack(state: GameState, attacker: UnitState, target: UnitState, player: PlayerId) -> bool:
@@ -405,7 +438,8 @@ def _can_attack(state: GameState, attacker: UnitState, target: UnitState, player
     if attacker.attack is AttackKind.MELEE:
         return attacker.position.is_adjacent_to(target.position)
     distance = attacker.position.distance_to(target.position)
-    if distance < 1 or distance > RANGED_RANGE:
+    reach = FAR_SHOT_RANGE if _has_ability(attacker.card, "Far Shot") else RANGED_RANGE
+    if distance < 1 or distance > reach:
         return False
     return _path_is_clear(state, attacker.position, target.position)
 
@@ -744,7 +778,11 @@ def _start_of_attack_phase(state: GameState) -> GameState:
             )
             state = replace(state, units=units)
         else:
-            state = _apply_damage(state, state.unit(unit.unit_id), 1)
+            # The loop walks a snapshot: an earlier iteration may already have destroyed
+            # this unit (or the damage may kill the one being processed), so look it up.
+            current = next((u for u in state.units if u.unit_id == unit.unit_id), None)
+            if current is not None:
+                state = _apply_damage(state, current, 1)
     return state
 
 
@@ -755,11 +793,14 @@ def _end_of_attack_phase(state: GameState) -> GameState:
             continue
         if unit.unit_id in state.destroyed_by:
             continue
+        # Only battlefield units can be eaten: a summoner is never discarded, and gates are
+        # structures rather than units.
         neighbours = [
             other
             for other in state.units
             if other.owner == unit.owner
             and other.unit_id != unit.unit_id
+            and other.kind is UnitKind.UNIT
             and other.position.is_adjacent_to(unit.position)
         ]
         victim = min(neighbours, key=lambda u: int(u.unit_id), default=unit)

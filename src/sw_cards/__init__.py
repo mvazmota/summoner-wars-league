@@ -312,7 +312,6 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
         # shape as the printed layout, not a verified transcription.
         layout=((3, 0), (4, 1), ((3, 1), (5, 3))),
     ),
-
     _build_deck(
         "breakers",
         "Breakers",

@@ -328,9 +328,99 @@ def test_the_eater_discards_a_neighbour_when_it_destroyed_nothing() -> None:
     assert all(u.unit_id != snack.unit_id for u in after.units), "the neighbour is eaten"
 
 
+def test_the_eater_never_eats_its_own_summoner() -> None:
+    eater = _unit(100, EATER, Square(3, 2), strength=5, life=9)
+    state = _battle((eater,), phase=Phase.ATTACK)
+    summoner = state.summoner(PLAYER_A)
+    state = dataclasses.replace(
+        state, units=tuple(u for u in state.units if u.unit_id != summoner.unit_id)
+    )
+    state = dataclasses.replace(
+        state,
+        units=(*state.units, dataclasses.replace(summoner, position=Square(3, 1))),
+    )
+
+    after = step(state, EndPhase())
+
+    assert any(u.unit_id == summoner.unit_id for u in after.units), "the summoner stays"
+    assert all(u.unit_id != eater.unit_id for u in after.units), "the Eater eats itself instead"
+
+
 def test_the_eater_eats_itself_when_alone() -> None:
     eater = _unit(100, EATER, Square(3, 2), strength=5, life=9)
     state = _battle((eater,), phase=Phase.ATTACK)
 
     after = step(state, EndPhase())
     assert all(u.unit_id != eater.unit_id for u in after.units)
+
+
+# --------------------------------------------------------------------------------------
+# Breakers movement and range abilities
+# --------------------------------------------------------------------------------------
+
+WIND_ARCHER: Final[CardId] = CardId("breakers-wind_archer")
+GWALARK: Final[CardId] = CardId("breakers-gwalark")
+WIND_MAGE: Final[CardId] = CardId("breakers-wind_mage")
+
+
+def test_climb_moves_one_space_further_than_a_plain_unit() -> None:
+    mage = _unit(100, WIND_MAGE, Square(2, 1))
+    climber = _unit(101, CLIMBER, Square(0, 1))
+    state = _battle((mage, climber), phase=Phase.MOVE)
+
+    def reach(unit: UnitState) -> int:
+        squares = [
+            a.to
+            for a in legal_actions(state)
+            if isinstance(a, MoveUnit) and a.unit_id == unit.unit_id
+        ]
+        return max(unit.position.distance_to(square) for square in squares)
+
+    assert reach(mage) == 2, "a plain unit moves 2"
+    assert reach(climber) == 3, "Climb adds one"
+
+
+def test_swift_alone_reaches_three_spaces() -> None:
+    # Wind Archer has Swift only (no Climb): 3 spaces, straight, cards still block.
+    archer = _unit(100, WIND_ARCHER, Square(2, 1), attack=AttackKind.RANGED, strength=4)
+    state = _battle((archer,), phase=Phase.MOVE)
+    squares = {
+        a.to
+        for a in legal_actions(state)
+        if isinstance(a, MoveUnit) and a.unit_id == archer.unit_id
+    }
+    assert Square(2, 4) in squares
+    assert Square(2, 5) not in squares
+
+
+def test_far_shot_reaches_four_spaces() -> None:
+    archer = _unit(100, WIND_ARCHER, Square(3, 1), attack=AttackKind.RANGED, strength=4)
+    far = _unit(200, CLIMBER, Square(3, 5), owner=PLAYER_B, life=5)
+    near = _unit(201, CLIMBER, Square(3, 4), owner=PLAYER_B, life=5)
+    state = _battle((archer, far), phase=Phase.ATTACK)
+    attacks = {a.target for a in legal_actions(state) if isinstance(a, AttackUnit)}
+    assert far.unit_id in attacks, "4 spaces is inside Far Shot"
+
+    blocked = _battle((archer, far, near), phase=Phase.ATTACK)
+    attacks_blocked = {a.target for a in legal_actions(blocked) if isinstance(a, AttackUnit)}
+    assert far.unit_id not in attacks_blocked, "the line must still be clear"
+    assert near.unit_id in attacks_blocked
+
+
+def test_gwalark_flies_and_lends_flight_to_nearby_commons() -> None:
+    gwalark = _unit(100, GWALARK, Square(3, 2), life=8, strength=3)
+    common = _unit(101, WIND_MAGE, Square(3, 0))
+    far_common = _unit(102, WIND_MAGE, Square(0, 7))
+    state = _battle((gwalark, common, far_common), phase=Phase.MOVE)
+
+    def reach(unit: UnitState) -> int:
+        squares = [
+            a.to
+            for a in legal_actions(state)
+            if isinstance(a, MoveUnit) and a.unit_id == unit.unit_id
+        ]
+        return max((unit.position.distance_to(s) for s in squares), default=0)
+
+    assert reach(gwalark) == 3, "Flight: base 2 plus 1"
+    assert reach(common) == 3, "within 2 spaces of Gwalark, so it has Flight"
+    assert reach(far_common) == 2, "too far from Gwalark, no Flight"
