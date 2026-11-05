@@ -11,11 +11,12 @@ encoded as data — stats plus a short mechanical paraphrase — never as copied
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Final
+import json
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Final, TypedDict
 
-from sw_engine.ids import CardId, DeckId
-from sw_engine.state import AttackKind, Square, UnitKind
+from sw_core import AttackKind, CardId, DeckId, Square, UnitKind
 
 DECK_SIZE: Final[int] = 34
 GATE_LIFE: Final[int] = 10  # rulebook p.5: starting gates have 10 life
@@ -30,6 +31,9 @@ class CardDefinition:
     cost: int
     strength: int
     life: int
+    card_class: str = "Common"
+    ability_name: str | None = None
+    ability: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +80,61 @@ def _card(
     )
 
 
+class VerifiedCard(TypedDict, total=False):
+    """Shape of one entry in data/cards/<deck>.json."""
+
+    id: str
+    name: str
+    card_class: str
+    cost: int
+    life: int
+    attack: str
+    strength: int
+    ability_name: str
+    ability: str | None
+    source: str
+
+
+CARDS_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "data" / "cards"
+
+_ATTACK_BY_NAME: Final[dict[str, AttackKind]] = {
+    "melee": AttackKind.MELEE,
+    "ranged": AttackKind.RANGED,
+    "none": AttackKind.NONE,
+}
+
+
+def load_verified_cards(deck_id: DeckId) -> dict[str, VerifiedCard]:
+    """Read the hand-verified card data for a faction, keyed by card name.
+
+    The JSON files in `data/cards/` are transcribed from the physical cards. Anything not
+    present there is still a placeholder and must be marked as such in docs/CARD_STATUS.md.
+    """
+    path = CARDS_DIR / f"{deck_id}.json"
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    cards: list[VerifiedCard] = payload.get("cards", [])
+    return {entry["name"]: entry for entry in cards}
+
+
+def _apply_verified(card: CardDefinition, verified: dict[str, VerifiedCard]) -> CardDefinition:
+    entry = verified.get(card.name)
+    if entry is None:
+        return card
+    attack = _ATTACK_BY_NAME[entry["attack"]]
+    return replace(
+        card,
+        cost=entry["cost"],
+        life=entry["life"],
+        strength=entry["strength"],
+        attack=attack,
+        card_class=entry.get("card_class", "Common"),
+        ability_name=entry.get("ability_name"),
+        ability=entry.get("ability"),
+    )
+
+
 def _build_deck(
     slug: str,
     faction: str,
@@ -83,6 +142,7 @@ def _build_deck(
     summoner: str,
     units: tuple[tuple[str, str, AttackKind, int, int, int], ...],
     layout: tuple[tuple[int, int], tuple[int, int], tuple[tuple[int, int], ...]],
+    starting: tuple[str, str],
 ) -> DeckDefinition:
     """Build one faction deck from names, placeholder stats and a setup layout."""
     summoner_card = _card(
@@ -98,29 +158,44 @@ def _build_deck(
         strength=0,
         life=GATE_LIFE,
     )
+    verified = load_verified_cards(DeckId(slug))
     unit_cards = tuple(
-        _card(slug, unit_slug, name, attack=attack, cost=cost, strength=strength, life=life)
+        _apply_verified(
+            _card(slug, unit_slug, name, attack=attack, cost=cost, strength=strength, life=life),
+            verified,
+        )
         for unit_slug, name, attack, cost, strength, life in units
     )
 
     summoner_square, gate_square, unit_squares = layout
-    starting = StartingLayout(
+
+    # Only the two units printed on the summoner card back start on the board; the rest of
+    # the faction's units go into the draw pile.
+    by_slug = {entry[0]: card for entry, card in zip(units, unit_cards, strict=True)}
+    starting_units = tuple(
+        (by_slug[unit_slug], Square(*square))
+        for unit_slug, square in zip(starting, unit_squares, strict=True)
+    )
+    starting_layout = StartingLayout(
         summoner=(summoner_card, Square(*summoner_square)),
         gate=(gate_card, Square(*gate_square)),
-        units=tuple(
-            (card, Square(*square)) for card, square in zip(unit_cards, unit_squares, strict=True)
-        ),
+        units=starting_units,
     )
 
+    # Placeholder composition: the real recipe is 16 commons + 3 champions + 4 gates +
+    # 8 events (docs/RULES.md). Champions and events are not modelled yet, so the same
+    # 30 non-gate slots are spread evenly across the faction's unit cards instead.
     composition: list[CardId] = []
-    for card in unit_cards:
-        composition.extend([card.card_id] * 15)
+    per_card, remainder = divmod(DECK_SIZE - 4, len(unit_cards))
+    for index, card in enumerate(unit_cards):
+        copies = per_card + (1 if index < remainder else 0)
+        composition.extend([card.card_id] * copies)
     composition.extend([gate_card.card_id] * 4)
 
     return DeckDefinition(
         deck_id=DeckId(slug),
         faction=faction,
-        layout=starting,
+        layout=starting_layout,
         units=unit_cards,
         composition=tuple(composition),
     )
@@ -132,16 +207,20 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "cave_goblins",
         "Cave Goblins",
+        starting=("slinger", "beast_rider"),
         summoner="Sneeks",
         units=(
             ("slinger", "Horde Slinger", AttackKind.RANGED, 1, 1, 1),
             ("beast_rider", "Beast Rider", AttackKind.MELEE, 2, 3, 3),
+            ("horde_climber", "Horde Climber", AttackKind.MELEE, 0, 1, 3),
+            ("horde_clinger", "Horde Clinger", AttackKind.MELEE, 2, 2, 2),
         ),
         layout=((5, 0), (4, 1), ((5, 1), (3, 3))),
     ),
     _build_deck(
         "shadow_elves",
         "Shadow Elves",
+        starting=("mind_witch", "deceiver"),
         summoner="Taculla",
         units=(
             ("mind_witch", "Mind Witch", AttackKind.RANGED, 1, 2, 2),
@@ -152,6 +231,7 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "savanna_elves",
         "Savanna Elves",
+        starting=("lioness", "border_archer"),
         summoner="Abua Shi",
         units=(
             ("lioness", "Lioness", AttackKind.MELEE, 2, 3, 4),
@@ -162,6 +242,7 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "vanguards",
         "Vanguards",
+        starting=("temple_priest", "citadel_knight"),
         summoner="Sera",
         units=(
             ("temple_priest", "Temple Priest", AttackKind.MELEE, 2, 2, 2),
@@ -172,6 +253,7 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "fallen_kingdom",
         "Fallen Kingdom",
+        starting=("archer", "carrier"),
         summoner="Ret-Talus",
         units=(
             ("archer", "Undead Archer", AttackKind.RANGED, 2, 2, 2),
@@ -182,6 +264,7 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
     _build_deck(
         "polar_dwarves",
         "Polar Dwarves",
+        starting=("ice_golem", "frost_mage"),
         summoner="Svara",
         units=(
             ("ice_golem", "Ice Golem", AttackKind.MELEE, 2, 2, 5),
@@ -199,7 +282,7 @@ CARD_INDEX: Final[dict[CardId, CardDefinition]] = {
     for card in (
         deck.layout.summoner[0],
         deck.layout.gate[0],
-        *(card for card, _ in deck.layout.units),
+        *deck.units,
     )
 }
 

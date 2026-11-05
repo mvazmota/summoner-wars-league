@@ -1,85 +1,47 @@
 """Immutable game state.
 
-Everything here is a frozen dataclass. `step()` returns a new state and never mutates
-the input; that invariant is what makes the engine reproducible and safe to fork for
-search and determinisation.
+Everything here is a frozen dataclass. `step()` returns a new state and never mutates the
+input; that invariant is what makes the engine reproducible and safe to fork for search
+and determinisation.
 
-Every constant is sourced in `docs/RULES.md`, which cites the page of the official
-rulebook v1.2 it came from. Do not change a constant without updating that file.
+Constants, enums and geometry live in `sw_core` and are re-exported here so existing
+imports keep working.
 """
 
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from enum import Enum, auto
-from typing import Final
 
-from sw_engine.ids import CardId, PlayerId, UnitId
+from sw_core import (
+    BOARD_HEIGHT,
+    BOARD_WIDTH,
+    HAND_SIZE,
+    MAGIC_MAX,
+    MAX_UNITS_PER_PHASE,
+    AttackKind,
+    CardId,
+    Phase,
+    PlayerId,
+    Square,
+    UnitId,
+    UnitKind,
+)
 
-# Battlefield geometry — rulebook p.13/15: ROW = "6 adjacent spaces", COLUMN = "8".
-BOARD_WIDTH: Final[int] = 6
-BOARD_HEIGHT: Final[int] = 8
-
-# Magic track maximum — rulebook p.15.
-MAGIC_MAX: Final[int] = 15
-
-# Hand size kept at end of turn — rulebook p.5 (setup draws 5) and p.9 (draw up to 5).
-HAND_SIZE: Final[int] = 5
-
-# Rulebook p.7: move up to 3 different units; p.8: attack with up to 3 different units.
-MAX_UNITS_PER_PHASE: Final[int] = 3
-
-
-class Phase(Enum):
-    """Turn phases, in the order the rulebook mandates (p.6).
-
-    The five phases are completed in this exact order; the draw step happens after
-    MAGIC and before the opponent's turn (p.9).
-    """
-
-    SUMMON = auto()
-    MOVE = auto()
-    BUILD = auto()
-    ATTACK = auto()
-    MAGIC = auto()
-    DRAW = auto()
-
-
-class UnitKind(Enum):
-    """Everything that can stand on the battlefield."""
-
-    SUMMONER = auto()
-    UNIT = auto()
-    STRUCTURE = auto()
-    GATE = auto()
-
-
-class AttackKind(Enum):
-    """How a unit attacks. NONE for structures, gates and other non-attackers."""
-
-    NONE = auto()
-    MELEE = auto()
-    RANGED = auto()
-
-
-@dataclass(frozen=True, slots=True, order=True)
-class Square:
-    """A board coordinate. Origin is the engine's own; do not assume player A's side."""
-
-    x: int
-    y: int
-
-    def is_on_board(self) -> bool:
-        return 0 <= self.x < BOARD_WIDTH and 0 <= self.y < BOARD_HEIGHT
-
-    def is_adjacent_to(self, other: Square) -> bool:
-        """Orthogonal adjacency only — rulebook p.6: diagonals are never adjacent."""
-        return abs(self.x - other.x) + abs(self.y - other.y) == 1
-
-    def distance_to(self, other: Square) -> int:
-        """Orthogonal distance in spaces. Diagonals count as two."""
-        return abs(self.x - other.x) + abs(self.y - other.y)
+__all__ = [
+    "BOARD_HEIGHT",
+    "BOARD_WIDTH",
+    "HAND_SIZE",
+    "MAGIC_MAX",
+    "MAX_UNITS_PER_PHASE",
+    "AttackKind",
+    "GameState",
+    "Phase",
+    "PlayerState",
+    "Square",
+    "UnitKind",
+    "UnitState",
+]
 
 
 @dataclass(frozen=True, slots=True)

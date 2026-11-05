@@ -13,9 +13,9 @@ from sw_engine.engine import initial_state, legal_actions, step
 from sw_engine.ids import DeckId
 from sw_engine.state import GameState
 
-GOLDEN_INITIAL_HASH = "d266e4b44668379c"
-GOLDEN_AFTER_SUMMON_HASH = "3cefab72c5c7509e"
-GOLDEN_AFTER_END_PHASE_HASH = "9b8e642f8235f744"
+GOLDEN_INITIAL_HASH = "6a924ccbf7208a34"
+GOLDEN_AFTER_SUMMON_HASH = "372e7f76906e8936"
+GOLDEN_AFTER_END_PHASE_HASH = "86a1ae7eed9e91a0"
 
 DECK_A = DeckId("savanna_elves")
 DECK_B = DeckId("cave_goblins")
