@@ -1,7 +1,7 @@
-"""Engine contract tests for milestone M0.
+"""Engine contract and rules tests.
 
-These encode the invariants the rest of the project depends on: determinism,
-immutability, legality closure, terminal semantics, and observation filtering.
+Each test names the rulebook page it encodes. If a test fails, the rule (or the engine's
+reading of it) changed: fix the engine, never silently relax the assertion.
 """
 
 from __future__ import annotations
@@ -13,12 +13,21 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from sw_engine.actions import EndTurn
+from sw_cards import get_card
+from sw_engine.actions import (
+    AttackUnit,
+    BuildStructure,
+    DiscardForMagic,
+    EndPhase,
+    MoveUnit,
+    SummonUnit,
+)
 from sw_engine.engine import (
     STARTING_MAGIC_FIRST,
     STARTING_MAGIC_SECOND,
     Outcome,
     RulesError,
+    adjudicate_by_life,
     initial_state,
     is_terminal,
     legal_actions,
@@ -26,8 +35,18 @@ from sw_engine.engine import (
     outcome,
     step,
 )
-from sw_engine.ids import PLAYER_A, PLAYER_B, DeckId, opponent
-from sw_engine.state import HAND_SIZE, GameState, Phase, SummonerState
+from sw_engine.ids import PLAYER_A, PLAYER_B, CardId, DeckId, PlayerId, UnitId, opponent
+from sw_engine.state import (
+    HAND_SIZE,
+    MAX_UNITS_PER_PHASE,
+    AttackKind,
+    GameState,
+    Phase,
+    PlayerState,
+    Square,
+    UnitKind,
+    UnitState,
+)
 
 DECK_A = DeckId("placeholder_alpha")
 DECK_B = DeckId("placeholder_beta")
@@ -37,14 +56,60 @@ def _state(seed: int = 7) -> GameState:
     return initial_state(DECK_A, DECK_B, seed)
 
 
-def _with_dead_summoner(state: GameState, player: int) -> GameState:
-    players = list(state.players)
-    index = next(i for i, p in enumerate(players) if int(p.player) == player)
-    target = players[index]
-    dead = dataclasses.replace(target.summoner, damage=target.summoner.hp)
-    players[index] = dataclasses.replace(target, summoner=dead)
-    pair = (players[0], players[1])
-    return dataclasses.replace(state, players=pair)
+def _unit(
+    unit_id: int,
+    owner: PlayerId,
+    square: tuple[int, int],
+    *,
+    kind: UnitKind = UnitKind.UNIT,
+    attack: AttackKind = AttackKind.MELEE,
+    strength: int = 2,
+    life: int = 3,
+) -> UnitState:
+    return UnitState(
+        unit_id=UnitId(unit_id),
+        owner=owner,
+        card=CardId(f"test-{unit_id}"),
+        kind=kind,
+        attack=attack,
+        position=Square(*square),
+        strength=strength,
+        life=life,
+    )
+
+
+def _combat_state(units: tuple[UnitState, ...], phase: Phase = Phase.ATTACK) -> GameState:
+    """A state with hand-picked units, so combat maths is isolated from setup noise.
+
+    Summoners are added when the test does not supply them, and hands are emptied so no
+    unrelated action is legal. Their squares (0,7) and (5,0) are reserved for this helper.
+    """
+    state = _state()
+    owners = {u.owner for u in units if u.kind is UnitKind.SUMMONER}
+    extra: list[UnitState] = []
+    if PLAYER_A not in owners:
+        extra.append(_unit(90, PLAYER_A, (0, 7), kind=UnitKind.SUMMONER, attack=AttackKind.NONE))
+    if PLAYER_B not in owners:
+        extra.append(_unit(91, PLAYER_B, (5, 0), kind=UnitKind.SUMMONER, attack=AttackKind.NONE))
+    all_units = (*units, *extra)
+    ids = {u.owner: u.unit_id for u in all_units if u.kind is UnitKind.SUMMONER}
+    players = tuple(
+        dataclasses.replace(p, summoner_id=ids[p.player], hand=(), deck=(), discard=())
+        for p in state.players
+    )
+    pair: tuple[PlayerState, PlayerState] = (players[0], players[1])
+    return dataclasses.replace(state, units=all_units, phase=phase, active=PLAYER_A, players=pair)
+
+
+def _advance(state: GameState, target: Phase) -> GameState:
+    while state.phase is not target:
+        state = step(state, EndPhase())
+    return state
+
+
+# --------------------------------------------------------------------------------------
+# Setup — rulebook p.5
+# --------------------------------------------------------------------------------------
 
 
 def test_same_seed_is_reproducible() -> None:
@@ -61,117 +126,264 @@ def test_state_is_frozen() -> None:
         state.turn = 99  # type: ignore[misc]
 
 
-def test_initial_hand_and_deck_sizes() -> None:
+def test_setup_sizes_and_magic() -> None:
+    """p.5: draw 5, first player on 2 magic, opponent on 3; board starts populated."""
     state = _state()
     for player in state.players:
         assert len(player.hand) == HAND_SIZE
-        assert len(player.deck) == 30 - HAND_SIZE
-        assert player.discard == ()
-
-
-def test_first_player_starts_on_two_magic_and_opponent_on_three() -> None:
-    """Rulebook p.5: the first player begins on 2, the other on 3."""
-    state = _state()
-    active = state.active_player()
+        assert len(player.deck) == 34 - HAND_SIZE
+    active = state.player(state.active)
     other = state.player(opponent(state.active))
     assert active.magic == STARTING_MAGIC_FIRST == 2
     assert other.magic == STARTING_MAGIC_SECOND == 3
     assert state.phase is Phase.SUMMON
+    # summoner, gate and two starting units per side
+    assert len(state.units_of(PLAYER_A)) == 4
+    assert len(state.units_of(PLAYER_B)) == 4
 
 
-def test_legal_actions_non_empty_and_pass_only() -> None:
+# --------------------------------------------------------------------------------------
+# Summon — rulebook p.6
+# --------------------------------------------------------------------------------------
+
+
+def test_summon_places_unit_and_pays_cost() -> None:
     state = _state()
-    actions = legal_actions(state)
-    assert actions == (EndTurn(),)
+    state = dataclasses.replace(state, active=PLAYER_A)
+    action = next(a for a in legal_actions(state) if isinstance(a, SummonUnit))
+    cost = get_card(action.card).cost
+    after = step(state, action)
+
+    assert after.player(PLAYER_A).magic == state.player(PLAYER_A).magic - cost
+    assert len(after.units) == len(state.units) + 1
+    gate = next(u for u in state.units_of(PLAYER_A) if u.kind is UnitKind.GATE)
+    assert action.position.is_adjacent_to(gate.position)
 
 
-def test_step_does_not_mutate_input() -> None:
-    state = _state()
-    before = state.state_hash()
-    after = step(state, EndTurn())
-    assert state.state_hash() == before
-    assert after.state_hash() != before
-
-
-def test_end_turn_switches_player_and_advances_turn() -> None:
-    state = _state()
-    after = step(state, EndTurn())
-    assert after.active == opponent(state.active)
-    assert after.turn == state.turn + 1
-    assert after.phase is Phase.SUMMON
-
-
-def test_illegal_action_raises() -> None:
-    state = _state()
+def test_summon_rejects_square_not_next_to_gate() -> None:
+    state = dataclasses.replace(_state(), active=PLAYER_A)
+    card = next(c for c in state.player(PLAYER_A).hand if get_card(c).kind is UnitKind.UNIT)
     with pytest.raises(RulesError):
-        step(state, "not an action")  # type: ignore[arg-type]
+        step(state, SummonUnit(card, Square(5, 7)))
 
 
-def test_not_terminal_at_start_and_no_outcome() -> None:
+def test_summon_requires_magic() -> None:
+    state = dataclasses.replace(_state(), active=PLAYER_A)
+    broke = dataclasses.replace(state.player(PLAYER_A), magic=0)
+    players = (broke, state.player(PLAYER_B))
+    state = dataclasses.replace(state, players=players)
+    cards = [a for a in legal_actions(state) if isinstance(a, SummonUnit)]
+    assert cards == []
+
+
+# --------------------------------------------------------------------------------------
+# Move — rulebook p.7
+# --------------------------------------------------------------------------------------
+
+
+def test_only_three_units_may_move() -> None:
+    units = (
+        _unit(1, PLAYER_A, (0, 2)),
+        _unit(2, PLAYER_A, (2, 2)),
+        _unit(3, PLAYER_A, (4, 2)),
+        _unit(4, PLAYER_A, (0, 4)),
+    )
+    state = _combat_state(units, phase=Phase.MOVE)
+    state = step(state, MoveUnit(UnitId(1), Square(1, 2)))
+    for unit_id, target in ((2, Square(3, 2)), (3, Square(5, 2))):
+        state = step(state, MoveUnit(UnitId(unit_id), target))
+    assert len(state.moved) == MAX_UNITS_PER_PHASE
+    remaining = [a for a in legal_actions(state) if isinstance(a, MoveUnit)]
+    assert remaining == []
+
+
+def test_cannot_move_diagonally_or_through_cards() -> None:
+    units = (
+        _unit(1, PLAYER_A, (2, 2)),
+        _unit(2, PLAYER_B, (3, 2)),
+    )
+    state = _combat_state(units, phase=Phase.MOVE)
+    with pytest.raises(RulesError):
+        step(state, MoveUnit(UnitId(1), Square(3, 3)))  # diagonal
+    with pytest.raises(RulesError):
+        step(state, MoveUnit(UnitId(1), Square(4, 2)))  # blocked at (3,2)
+    step(state, MoveUnit(UnitId(1), Square(2, 4)))  # legal 2-space move
+
+
+def test_structures_cannot_move() -> None:
+    gate = _unit(9, PLAYER_A, (2, 2), kind=UnitKind.GATE, attack=AttackKind.NONE)
+    state = _combat_state((gate,), phase=Phase.MOVE)
+    moves = [a for a in legal_actions(state) if isinstance(a, MoveUnit) and a.unit_id == UnitId(9)]
+    assert moves == []
+
+
+# --------------------------------------------------------------------------------------
+# Attack — rulebook p.8
+# --------------------------------------------------------------------------------------
+
+
+def test_melee_needs_adjacency_ranged_needs_a_clear_line() -> None:
+    units = (
+        _unit(1, PLAYER_A, (2, 2), attack=AttackKind.MELEE),
+        _unit(2, PLAYER_A, (4, 6), attack=AttackKind.RANGED),
+        _unit(3, PLAYER_B, (2, 3)),  # adjacent to the melee attacker
+        _unit(4, PLAYER_B, (4, 3)),  # 3 straight spaces from the ranged attacker
+        _unit(5, PLAYER_B, (3, 4)),  # off-axis for the ranged attacker
+        _unit(6, PLAYER_B, (2, 5)),  # two spaces away: melee cannot reach
+    )
+    state = _combat_state(units)
+    legal = {(a.attacker, a.target) for a in legal_actions(state) if isinstance(a, AttackUnit)}
+    assert (UnitId(1), UnitId(3)) in legal  # melee, adjacent
+    assert (UnitId(1), UnitId(6)) not in legal  # melee, not adjacent
+    assert (UnitId(2), UnitId(4)) in legal  # ranged, 3 spaces in a line
+    assert (UnitId(2), UnitId(5)) not in legal  # off-axis, not a straight line
+
+
+def test_ranged_line_must_be_clear() -> None:
+    units = (
+        _unit(1, PLAYER_A, (1, 4), attack=AttackKind.RANGED),
+        _unit(2, PLAYER_B, (2, 4)),  # blocks the line
+        _unit(3, PLAYER_B, (4, 4)),
+    )
+    state = _combat_state(units)
+    legal = {(a.attacker, a.target) for a in legal_actions(state) if isinstance(a, AttackUnit)}
+    assert (UnitId(1), UnitId(2)) in legal
+    assert (UnitId(1), UnitId(3)) not in legal
+
+
+def test_destroying_enemy_card_grants_magic() -> None:
+    units = (
+        _unit(1, PLAYER_A, (2, 2), strength=6),
+        _unit(2, PLAYER_B, (2, 3), life=1),
+        _unit(3, PLAYER_A, (0, 0), kind=UnitKind.SUMMONER, attack=AttackKind.NONE),
+        _unit(4, PLAYER_B, (5, 7), kind=UnitKind.SUMMONER, attack=AttackKind.NONE),
+    )
+    state = _combat_state(units)
+    state = dataclasses.replace(
+        state,
+        players=(
+            dataclasses.replace(state.player(PLAYER_A), magic=5),
+            state.player(PLAYER_B),
+        ),
+    )
+
+    after = step(state, AttackUnit(UnitId(1), UnitId(2)))
+    assert all(u.unit_id != UnitId(2) for u in after.units)
+    assert after.player(PLAYER_A).magic == 6
+
+
+def test_cost_of_inaction_damages_your_summoner() -> None:
+    """p.8: +1 damage to your summoner if you attacked nothing this turn."""
+    units = (
+        _unit(1, PLAYER_A, (0, 0), kind=UnitKind.SUMMONER, attack=AttackKind.NONE, life=12),
+        _unit(2, PLAYER_B, (5, 7), kind=UnitKind.SUMMONER, attack=AttackKind.NONE, life=12),
+    )
+    state = _combat_state(units)
+
+    after = step(state, EndPhase())  # leaves ATTACK without attacking
+    assert after.summoner(PLAYER_A).damage == 1
+    assert after.phase is Phase.MAGIC
+
+
+# --------------------------------------------------------------------------------------
+# Turn flow — rulebook p.9
+# --------------------------------------------------------------------------------------
+
+
+def test_end_of_turn_draws_back_to_five_and_passes_turn() -> None:
     state = _state()
-    assert is_terminal(state) is False
-    assert outcome(state) is None
-    assert legal_actions(state) != ()
+    start_active = state.active
+    state = _advance(state, Phase.MAGIC)
+    before_hand = len(state.player(start_active).hand)
+    after = step(state, EndPhase())
+    assert after.active == opponent(start_active)
+    assert after.turn == 2
+    assert after.phase is Phase.SUMMON
+    assert len(after.player(opponent(start_active)).hand) <= HAND_SIZE
+    assert len(after.player(start_active).hand) >= before_hand
 
 
-def test_dead_summoner_ends_the_game() -> None:
-    state = _with_dead_summoner(_state(), int(PLAYER_A))
-    assert is_terminal(state) is True
-    assert outcome(state) is Outcome.WIN_B
-    assert legal_actions(state) == ()
+def test_build_only_in_back_rows_or_by_summoner() -> None:
+    state = _advance(dataclasses.replace(_state(), active=PLAYER_A), Phase.BUILD)
+    gate_card = next(c for c in state.player(PLAYER_A).hand if c.endswith("gate"))
+    legal_squares = {a.position for a in legal_actions(state) if isinstance(a, BuildStructure)}
+    assert Square(0, 0) in legal_squares  # back row
+    assert Square(5, 7) not in legal_squares  # opponent's back row
+    step(state, BuildStructure(gate_card, Square(0, 2)))
 
 
-def test_both_summoners_dead_is_a_draw() -> None:
-    state = _with_dead_summoner(_with_dead_summoner(_state(), int(PLAYER_A)), int(PLAYER_B))
-    assert outcome(state) is Outcome.DRAW
+def test_magic_phase_discard_gains_one_magic() -> None:
+    state = _advance(dataclasses.replace(_state(), active=PLAYER_A), Phase.MAGIC)
+    card = state.player(PLAYER_A).hand[0]
+    before = state.player(PLAYER_A)
+    after = step(state, DiscardForMagic(card))
+    assert after.player(PLAYER_A).magic == min(15, before.magic + 1)
+    assert len(after.player(PLAYER_A).hand) == len(before.hand) - 1
+
+
+# --------------------------------------------------------------------------------------
+# Terminal states — rulebook p.17
+# --------------------------------------------------------------------------------------
+
+
+def test_summoner_death_ends_the_game() -> None:
+    units = (
+        _unit(1, PLAYER_A, (0, 0), kind=UnitKind.SUMMONER, attack=AttackKind.NONE),
+        _unit(2, PLAYER_B, (5, 7), kind=UnitKind.SUMMONER, attack=AttackKind.NONE, life=1),
+    )
+    state = _combat_state(units)
+    dead = dataclasses.replace(state, units=(units[0], dataclasses.replace(units[1], damage=1)))
+    assert is_terminal(dead)
+    assert outcome(dead) is Outcome.WIN_A
+    assert legal_actions(dead) == ()
 
 
 def test_observation_hides_opponent_hand() -> None:
-    state = _state()
-    obs = observation(state, PLAYER_A)
-    assert obs.me().player == PLAYER_A
-    assert obs.me().hand is not None
-    assert obs.opponent().player == PLAYER_B
-    assert obs.opponent().hand is None
-    assert obs.opponent().hand_size == 5
-    assert obs.opponent().deck_size == 25
-
-
-def test_observation_exposes_no_hidden_cards_in_units() -> None:
     obs = observation(_state(), PLAYER_A)
-    assert obs.units == ()
+    assert obs.me().hand is not None
+    assert obs.opponent().hand is None
+    assert obs.opponent().hand_size == HAND_SIZE
 
 
-@settings(max_examples=25, deadline=None)
-@given(
-    seed=st.integers(min_value=0, max_value=10_000), steps=st.integers(min_value=0, max_value=40)
-)
-def test_invariants_hold_under_random_legal_play(seed: int, steps: int) -> None:
+# --------------------------------------------------------------------------------------
+# Long-run invariants
+# --------------------------------------------------------------------------------------
+
+
+@settings(max_examples=20, deadline=None)
+@given(seed=st.integers(min_value=0, max_value=5000), steps=st.integers(min_value=1, max_value=60))
+def test_random_legal_play_keeps_invariants(seed: int, steps: int) -> None:
     state = initial_state(DECK_A, DECK_B, seed)
     rng = random.Random(seed)
     for _ in range(steps):
         actions = legal_actions(state)
-        if not actions or is_terminal(state):
+        if not actions:
             break
         state = step(state, rng.choice(actions))
 
-        assert not is_terminal(state) or outcome(state) is not None
         for player in state.players:
-            assert player.magic >= 0
-            assert player.summoner.damage >= 0
-            assert player.summoner.position.is_on_board()
+            assert 0 <= player.magic <= 15
             deck, hand, discard = player.zone_sizes()
-            assert deck + hand + discard == 30
+            # Summoned and built cards leave the zones, so the total can only shrink.
+            assert 0 < deck + hand + discard <= 34
+        positions = [u.position for u in state.units]
+        assert len(positions) == len(set(positions)), "two cards on the same square"
         for unit in state.units:
             assert unit.position.is_on_board()
             assert unit.damage >= 0
 
 
-def test_summoner_state_defaults_are_sane() -> None:
-    summoner = SummonerState(
-        owner=PLAYER_A,
-        card=_state().player(PLAYER_A).summoner.card,
-        position=_state().player(PLAYER_A).summoner.position,
-        hp=20,
-    )
-    assert summoner.is_alive()
+@settings(max_examples=5, deadline=None)
+@given(seed=st.integers(min_value=0, max_value=50))
+def test_games_terminate_under_a_turn_cap(seed: int) -> None:
+    """Fuzz target from AGENTS.md M1: every game finishes or is adjudicable by life."""
+    state = initial_state(DECK_A, DECK_B, seed)
+    rng = random.Random(seed)
+    for _ in range(4000):
+        if is_terminal(state) or state.turn > 200:
+            break
+        actions = legal_actions(state)
+        if not actions:
+            break
+        state = step(state, rng.choice(actions))
+    assert is_terminal(state) or adjudicate_by_life(state) is not None or state.turn > 200

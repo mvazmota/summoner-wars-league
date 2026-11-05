@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sw_engine.ids import CardId, PlayerId
-from sw_engine.state import Phase, Square, SummonerState, UnitState
+from sw_engine.state import AttackKind, Phase, Square, UnitKind, UnitState
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,7 +17,7 @@ class VisiblePlayer:
     """A player as seen by the observer: zone sizes, but only own hand contents."""
 
     player: PlayerId
-    summoner: SummonerState
+    summoner: UnitState
     magic: int
     deck_size: int
     hand: tuple[CardId, ...] | None
@@ -30,8 +30,11 @@ class VisibleUnit:
     unit_id: int
     owner: PlayerId
     card: CardId
+    kind: UnitKind
+    attack: AttackKind
     position: Square
-    hp: int
+    strength: int
+    life: int
     damage: int
 
 
@@ -62,7 +65,10 @@ def visible_unit(unit: UnitState) -> VisibleUnit:
         unit_id=int(unit.unit_id),
         owner=unit.owner,
         card=unit.card,
+        kind=unit.kind,
+        attack=unit.attack,
         position=unit.position,
-        hp=unit.hp,
+        strength=unit.strength,
+        life=unit.life,
         damage=unit.damage,
     )
