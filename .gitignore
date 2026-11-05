@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.uv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+data/*
+!data/.gitkeep
+reports/
+*.parquet
+*.sqlite
+*.jsonl
