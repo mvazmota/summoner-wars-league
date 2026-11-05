@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 from sw_cards import REGISTRY, known_decks
 from sw_core import DeckId
 from sw_league.analysis import summarise
+from sw_league.playbook import load as load_playbook
 from sw_league.replay import play_game
 
 WEB_DIR: Final[Path] = Path(__file__).resolve().parents[1] / "web"
@@ -39,9 +40,20 @@ def deck_catalogue() -> list[dict[str, Any]]:
                 "units": len(deck.units),
                 "events": len(deck.events),
                 "verified": bool(deck.events),
+                "playbook": load_playbook(deck_id).identity,
             }
         )
     return catalogue
+
+
+def _playbook_summary(deck_id: str) -> dict[str, Any]:
+    book = load_playbook(DeckId(deck_id))
+    return {
+        "identity": book.identity,
+        "summary": book.summary,
+        "source": book.source,
+        "notes": list(book.notes),
+    }
 
 
 def build_game(deck_a: str, deck_b: str, seed: int | None) -> dict[str, Any]:
@@ -63,6 +75,8 @@ def build_game(deck_a: str, deck_b: str, seed: int | None) -> dict[str, Any]:
             "seed": seed,
             "frames": len(frames),
             "result": frames[-1].get("result"),
+            "playbook_a": _playbook_summary(deck_a),
+            "playbook_b": _playbook_summary(deck_b),
         },
         "frames": frames,
         "report": report,

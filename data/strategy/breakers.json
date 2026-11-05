@@ -1,0 +1,30 @@
+{
+  "deck": "breakers",
+  "identity": "ranged-poke",
+  "source": "https://sw-zone.com/faction/breakers/strategy-guide",
+  "summary": "Poke from range and reposition instead of trading: protect the archers, keep Taculla back until the endgame, punish anyone who closes in.",
+  "notes": [
+    "Damage is low, survivability is high: win by never letting the opponent connect.",
+    "Wind Archer and Wind Mage do the work; Deceivers next to them punish anyone who steps in.",
+    "Perplexing Tempest slows the enemy approach; Blast and Hypnotic Call punish a committed attack.",
+    "Mind Capture is positional, not economic: take a unit to open a lane or blunt a rush, not for value."
+  ],
+  "weights": {
+    "SummonUnit": 1.1,
+    "BuildStructure": 0.9,
+    "AttackUnit": 1.0,
+    "MoveUnit": 1.0,
+    "PlayEvent": 1.2,
+    "ForceUnit": 1.5,
+    "SlySwap": 0.6,
+    "MimicAbility": 0.9,
+    "CommandAlly": 1.2,
+    "DiscardForMagic": 0.8
+  },
+  "swarm_target_board": 3,
+  "build_gate_below": 1,
+  "event_value_from_board": 2,
+  "keep_summoner_safe": true,
+  "prefer_ranged_attackers": true,
+  "target_priority": ["COMMON", "CHAMPION", "GATE", "SUMMONER"]
+}

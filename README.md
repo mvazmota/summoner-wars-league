@@ -26,6 +26,18 @@ plain JavaScript for the page. No Flask, no build step, no network access.
 `scripts/visualize.py` still writes a single self-contained HTML file per game, which is
 handy for sharing a specific replay offline.
 
+## The bots play a plan, not just the rules
+
+`data/strategy/<deck>.json` holds a **playbook** distilled from that faction's SW Zone strategy
+guide: how much it wants to summon, build, attack or reposition, which targets it values,
+whether its summoner belongs in the fight. `sw_league.playbook` loads it and
+`policy.score_action` turns it into action scores, so the Cave Goblins swarm, the Breakers poke
+from range and the Fallen Kingdom trades bodies on purpose.
+
+The guides' prose cannot drive a bot, so each one is reduced to a handful of numbers plus the
+link it came from. Playbooks are heuristics, not truth: they encode one strong player's plan,
+and the point of the league is to test whether that plan wins.
+
 ## Watch a game
 
 ```bash

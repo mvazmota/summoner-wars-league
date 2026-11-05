@@ -13,6 +13,7 @@ from sw_cards import get_card
 from sw_core import DeckId
 from sw_engine.engine import initial_state, is_terminal, outcome, step
 from sw_engine.state import GameState, UnitState
+from sw_league.playbook import load as load_playbook
 from sw_league.policy import choose_action, describe_action
 
 MAX_STEPS: Final[int] = 4000
@@ -77,13 +78,14 @@ def play_game(
 ) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     state = initial_state(deck_a, deck_b, seed)
+    books = {0: load_playbook(deck_a), 1: load_playbook(deck_b)}
     frames: list[dict[str, Any]] = [
         {"label": "Setup", "action": {"type": "Setup", "label": "Setup"}, "state": snapshot(state)}
     ]
 
     steps = 0
     while not is_terminal(state) and steps < max_steps:
-        action = choose_action(state, rng)
+        action = choose_action(state, rng, books[int(state.active)])
         actor = int(state.active)
         detail = describe_action(action)
         try:

@@ -177,6 +177,11 @@
           <button id="skip" style="margin-left:auto">saltar para o fim</button>
         </div>
       </div>
+      <div class="card">
+        <h2>Planos</h2>
+        <p class="zone" id="planA" style="margin:0 0 6px"></p>
+        <p class="zone" id="planB" style="margin:0"></p>
+      </div>
       <div class="card"><h2>Estado</h2><table id="players"></table></div>
       <div class="card"><h2>Detalhe da carta</h2><div class="zone" id="details">Clica numa carta no tabuleiro.</div></div>
     </div>
@@ -270,8 +275,11 @@
     $("newgame").hidden = false;
     end.classList.remove("show");
 
-    $("meta").textContent = payload.meta.faction_a + " vs " + payload.meta.faction_b +
+    $("meta").textContent = payload.meta.faction_a + " (" + payload.meta.playbook_a.identity + ")" +
+      " vs " + payload.meta.faction_b + " (" + payload.meta.playbook_b.identity + ")" +
       " · seed " + payload.meta.seed;
+    $("planA").textContent = payload.meta.playbook_a.summary;
+    $("planB").textContent = payload.meta.playbook_b.summary;
     slider.max = String(state.frames.length - 1);
     render();
     autoplay();

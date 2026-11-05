@@ -9,6 +9,8 @@ data/*
 !data/.gitkeep
 !data/cards/
 !data/cards/*.json
+!data/strategy/
+!data/strategy/*.json
 out/
 
 reports/

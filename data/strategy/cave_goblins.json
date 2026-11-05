@@ -1,0 +1,29 @@
+{
+  "deck": "cave_goblins",
+  "identity": "swarm",
+  "source": "https://sw-zone.com/faction/cave-goblins/strategy-guide",
+  "summary": "Fill the board with cheap units, build the second gate immediately, and keep pressure on gates and the enemy summoner.",
+  "notes": [
+    "Summon aggressively: more bodies means more value from Pile On, Enrage the Horde and Sneak.",
+    "The second gate is the priority build; a delayed gate is only acceptable to Sly Sneeks into enemy territory.",
+    "Play commons rather than discarding them for magic: the deck is cheap and magic is not the bottleneck.",
+    "Pressure matters more than perfect trades, but do not leave units where they die for free."
+  ],
+  "weights": {
+    "SummonUnit": 1.6,
+    "BuildStructure": 1.3,
+    "AttackUnit": 1.2,
+    "MoveUnit": 0.9,
+    "PlayEvent": 1.0,
+    "ForceUnit": 0.6,
+    "SlySwap": 1.1,
+    "MimicAbility": 0.5,
+    "CommandAlly": 0.8,
+    "DiscardForMagic": 0.4
+  },
+  "swarm_target_board": 4,
+  "build_gate_below": 2,
+  "event_value_from_board": 3,
+  "keep_summoner_safe": true,
+  "target_priority": ["SUMMONER", "GATE", "COMMON", "CHAMPION"]
+}

@@ -368,12 +368,22 @@ def _event_targets(state: GameState, player: PlayerId, card_id: CardId) -> list[
             and unit.kind is UnitKind.UNIT
             and get_card(unit.card).card_class in {"Common", "Champion"}
         ]
-        return [
-            unit
-            for unit in candidates
-            if (unit.position.x == summoner.position.x or unit.position.y == summoner.position.y)
-            and _path_is_clear(state, summoner.position, unit.position)
-        ]
+        usable = []
+        for unit in candidates:
+            if unit.position.x != summoner.position.x and unit.position.y != summoner.position.y:
+                continue
+            if not _path_is_clear(state, summoner.position, unit.position):
+                continue
+            step_x = (unit.position.x > summoner.position.x) - (
+                unit.position.x < summoner.position.x
+            )
+            step_y = (unit.position.y > summoner.position.y) - (
+                unit.position.y < summoner.position.y
+            )
+            if not _force_steps(state, unit, step_x, step_y, 1, through=True):
+                continue
+            usable.append(unit)
+        return usable
     if card_id == HYPNOTIC_CALL:
         return [
             unit

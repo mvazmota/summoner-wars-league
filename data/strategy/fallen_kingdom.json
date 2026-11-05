@@ -1,0 +1,29 @@
+{
+  "deck": "fallen_kingdom",
+  "identity": "sacrifice-combo",
+  "source": "https://sw-zone.com/faction/fallen-kingdom/strategy-guide",
+  "summary": "Force exchanges and pay in bodies: every death feeds Sacrificial Pyre, Undead Warrior and Ret-Talus, so trade eagerly.",
+  "notes": [
+    "A quiet board is a losing board: aggression creates the deaths this deck converts into value.",
+    "Sacrifice is a resource, not a cost: Purge, Elut-Bal and Life Drain are all worth it when they enable a kill or a lane.",
+    "Ret-Talus pays 2 damage to recover an Undead unit: use it when the body matters more than the life.",
+    "Blood Fury rewards the same exchanges, so keep the Undead Warrior in the fight."
+  ],
+  "weights": {
+    "SummonUnit": 1.2,
+    "BuildStructure": 0.8,
+    "AttackUnit": 1.5,
+    "MoveUnit": 0.9,
+    "PlayEvent": 1.1,
+    "ForceUnit": 0.7,
+    "SlySwap": 0.5,
+    "MimicAbility": 0.5,
+    "CommandAlly": 0.8,
+    "DiscardForMagic": 0.9
+  },
+  "swarm_target_board": 3,
+  "build_gate_below": 1,
+  "event_value_from_board": 2,
+  "keep_summoner_safe": false,
+  "target_priority": ["COMMON", "CHAMPION", "GATE", "SUMMONER"]
+}
