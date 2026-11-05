@@ -123,6 +123,10 @@ def test_fallen_kingdom_is_transcribed() -> None:
     assert by_name["Elut-Bal"].strength == 6
     assert by_name["Gul-Dass"].life == 9
 
-    # One common and one champion are still missing, so the pile is short of 30.
-    assert not deck.is_complete
-    assert len(deck.composition) == DRAW_PILE_SIZE - 5
+    by_name["Undead Warrior"] = next(card for card in deck.units if card.name == "Undead Warrior")
+    by_name["Dragos"] = next(card for card in deck.units if card.name == "Dragos")
+    assert (by_name["Undead Warrior"].cost, by_name["Undead Warrior"].life) == (2, 4)
+    assert (by_name["Dragos"].life, by_name["Dragos"].strength) == (8, 4)
+
+    assert deck.is_complete
+    assert len(deck.composition) == DRAW_PILE_SIZE

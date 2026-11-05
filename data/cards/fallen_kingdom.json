@@ -40,6 +40,18 @@
       "source": "card photo, full resolution"
     },
     {
+      "id": "fallen_kingdom-dragos",
+      "name": "Dragos",
+      "card_class": "Champion",
+      "cost": 6,
+      "life": 8,
+      "attack": "melee",
+      "strength": 4,
+      "ability_name": "Life Drain",
+      "ability": "Before this unit attacks, it may destroy a friendly unit within 2 spaces. If it does, that attack's dice are upgraded (the two symbols on the card were not legible at this resolution; re-check before wiring).",
+      "source": "card photo, full resolution — the Life Drain symbol swap is not legible"
+    },
+    {
       "id": "fallen_kingdom-hellfire_cultist",
       "name": "Hellfire Cultist",
       "card_class": "Common",
@@ -130,6 +142,18 @@
       "source": "card photo, full resolution",
       "phase": "Summon Phase",
       "copies": 2
+    },
+    {
+      "id": "fallen_kingdom-undead_warrior",
+      "name": "Undead Warrior",
+      "card_class": "Common",
+      "cost": 2,
+      "life": 4,
+      "attack": "melee",
+      "strength": 2,
+      "ability_name": "Blood Fury / Imbued Strength",
+      "ability": "Blood Fury: each time a unit is destroyed on your turn, boost this unit; at the end of your turn remove 2 boosts from it. Imbued Strength: +1 strength per boost, to a maximum of +5.",
+      "source": "card photo, full resolution"
     }
   ]
 }

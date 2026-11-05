@@ -155,6 +155,14 @@ CARD_PHOTOS: Final[tuple[tuple[str, str], ...]] = (
         "d028bba2d0cb8af8fcb9fefdf4ba3765c469e4065133af22a17a494abc07ecda/img_d69399e1f91e.png",
         "fallen_kingdom-blood_summon",
     ),
+    (
+        "548bc3766ad37136282d28e12a150d278b5e9cb4ce6686a6112f44326eee63aa/img_fab3711c51a1.png",
+        "fallen_kingdom-dragos",
+    ),
+    (
+        "b61138a31b70d44d10e9bd8cb06d2f2cd04adec70e04be45ff33fd9f8e9a863e/img_21a338384b93.png",
+        "fallen_kingdom-undead_warrior",
+    ),
 )
 
 # The art panel is the right-hand portion of the card, below the name banner.

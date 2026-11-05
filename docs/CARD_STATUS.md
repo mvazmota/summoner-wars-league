@@ -56,7 +56,7 @@ Shadow Elves start with Sage Ranger and Shadow Mage.
 The deck is **34 of 34**: four commons at 4 copies, three champions, four events at 2 copies
 and the four gates.
 
-## Fallen Kingdom — 10 of 12 distinct cards
+## Fallen Kingdom — complete
 
 Starting setup per SW Zone: **Undead Carrier** and **Undead Archer**, which matches the photo
 already on file.
@@ -66,7 +66,9 @@ already on file.
 | Ret-Talus | Summoner | — | 14 | 2 melee | Raise the Dead | yes |
 | Elut-Bal | Champion | 6 | 6 | 6 melee | Summoned by Fire | yes |
 | Gul-Dass | Champion | 6 | 9 | 2 melee | Wrath / Spawn | yes |
+| Dragos | Champion | 6 | 8 | 4 melee | Life Drain | yes, symbol swap not legible |
 | Hellfire Cultist | Common | 0 | 2 | 2 ranged | Immolate | yes |
+| Undead Warrior | Common | 2 | 4 | 2 melee | Blood Fury / Imbued Strength | yes |
 | Undead Archer | Common | 2 | 2 | 3 ranged | Soul Shift | yes |
 | Undead Carrier | Common | 1 | 3 | 2 melee | Soulless / Infect | yes |
 | Sacrificial Pyre | Epic Event (Summon Phase) | 1 | — | — | Active | yes |
@@ -74,7 +76,12 @@ already on file.
 | Hellforged Weapon | Standard Event (Build Phase) | 0 | — | — | Cursed | yes |
 | Blood Summon | Standard Event (Summon Phase) | 0 | — | — | — | yes |
 
-Missing: **one common** (four copies) and **one champion**, so the pile is 25 of 30.
+The deck is **34 of 34**: four commons at 4 copies, three champions, four events at 2 copies
+and the four gates.
+
+One open reading: **Dragos' Life Drain** swaps one die symbol for another and that part of the
+card is not legible at the photo's resolution. The destruction of a friendly unit is
+transcribed; the symbol swap is not.
 
 ## Still placeholders
 

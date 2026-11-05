@@ -78,7 +78,7 @@ Verified on this machine:
 uv sync
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-uv run pytest -m "not slow"       # 116 passed
+uv run pytest -m "not slow"       # 117 passed
 uv run python -m sw_engine.smoke  # prints the canonical state hash
 ```
 
