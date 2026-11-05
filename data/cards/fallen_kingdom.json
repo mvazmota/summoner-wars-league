@@ -48,8 +48,8 @@
       "attack": "melee",
       "strength": 4,
       "ability_name": "Life Drain",
-      "ability": "Before this unit attacks, it may destroy a friendly unit within 2 spaces. If it does, that attack's dice are upgraded (the two symbols on the card were not legible at this resolution; re-check before wiring).",
-      "source": "card photo, full resolution — the Life Drain symbol swap is not legible"
+      "ability": "Before this unit attacks, it may destroy a friendly unit within 2 spaces. If it does, during that attack special results count as melee hits.",
+      "source": "card photo + owner clarification (special = melee hit), 2026-11-05"
     },
     {
       "id": "fallen_kingdom-hellfire_cultist",

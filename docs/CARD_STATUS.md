@@ -66,7 +66,7 @@ already on file.
 | Ret-Talus | Summoner | — | 14 | 2 melee | Raise the Dead | yes |
 | Elut-Bal | Champion | 6 | 6 | 6 melee | Summoned by Fire | yes |
 | Gul-Dass | Champion | 6 | 9 | 2 melee | Wrath / Spawn | yes |
-| Dragos | Champion | 6 | 8 | 4 melee | Life Drain | yes, symbol swap not legible |
+| Dragos | Champion | 6 | 8 | 4 melee | Life Drain | yes |
 | Hellfire Cultist | Common | 0 | 2 | 2 ranged | Immolate | yes |
 | Undead Warrior | Common | 2 | 4 | 2 melee | Blood Fury / Imbued Strength | yes |
 | Undead Archer | Common | 2 | 2 | 3 ranged | Soul Shift | yes |
@@ -79,9 +79,9 @@ already on file.
 The deck is **34 of 34**: four commons at 4 copies, three champions, four events at 2 copies
 and the four gates.
 
-One open reading: **Dragos' Life Drain** swaps one die symbol for another and that part of the
-card is not legible at the photo's resolution. The destruction of a friendly unit is
-transcribed; the symbol swap is not.
+Dragos' Life Drain was resolved by the owner: during the boosted attack, **special results count
+as melee hits**. The engine's dice already model a special face, ignored by default (rulebook
+p.8), so this is a per-attack flag rather than a new rule.
 
 ## Still placeholders
 
