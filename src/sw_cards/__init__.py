@@ -19,7 +19,16 @@ from typing import Final, NotRequired, TypedDict
 from sw_core import AttackKind, CardId, DeckId, Square, UnitKind
 
 DECK_SIZE: Final[int] = 34
-GATE_LIFE: Final[int] = 10  # rulebook p.5: starting gates have 10 life
+"""Cards in a faction deck, counting the summoner and the two starting units."""
+
+GATE_LIFE: Final[int] = 10  # rulebook p.5: the starting gate has 10 life
+GATE_LIFE_STANDARD: Final[int] = 5  # the three other gates have 5 life each
+GATE_COST: Final[int] = 0  # gates are structures and cost no magic
+
+# Everything that is dealt rather than placed during setup: 16 commons + 3 champions +
+# 8 events + the 3 five-life gates. The summoner, the ten-life gate and the two starting
+# units are on the board before anyone draws.
+DRAW_PILE_SIZE: Final[int] = DECK_SIZE - 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +64,7 @@ class DeckDefinition:
     faction: str
     layout: StartingLayout
     units: tuple[CardDefinition, ...]
+    gates: tuple[CardDefinition, CardDefinition]
     composition: tuple[CardId, ...]
 
 
@@ -164,9 +174,19 @@ def _build_deck(
         f"{faction} Gate",
         kind=UnitKind.GATE,
         attack=AttackKind.NONE,
-        cost=0,
+        cost=GATE_COST,
         strength=0,
         life=GATE_LIFE,
+    )
+    extra_gate_card = _card(
+        slug,
+        "gate_5",
+        f"{faction} Gate",
+        kind=UnitKind.GATE,
+        attack=AttackKind.NONE,
+        cost=GATE_COST,
+        strength=0,
+        life=GATE_LIFE_STANDARD,
     )
     unit_cards = tuple(
         _apply_verified(
@@ -191,21 +211,22 @@ def _build_deck(
         units=starting_units,
     )
 
-    # Placeholder composition: the real recipe is 16 commons + 3 champions + 4 gates +
-    # 8 events (docs/RULES.md). Champions and events are not modelled yet, so the same
-    # 30 non-gate slots are spread evenly across the faction's unit cards instead.
-    composition: list[CardId] = []
-    per_card, remainder = divmod(DECK_SIZE - 4, len(unit_cards))
+    # Real recipe: 16 commons + 3 champions + 8 events + 3 five-life gates. Champions and
+    # events are not modelled yet, so their 11 slots are filled with commons for now; the
+    # gates are already right.
+    composition: list[CardId] = [extra_gate_card.card_id] * 3
+    unit_slots = DRAW_PILE_SIZE - len(composition)
+    per_card, remainder = divmod(unit_slots, len(unit_cards))
     for index, card in enumerate(unit_cards):
         copies = per_card + (1 if index < remainder else 0)
         composition.extend([card.card_id] * copies)
-    composition.extend([gate_card.card_id] * 4)
 
     return DeckDefinition(
         deck_id=DeckId(slug),
         faction=faction,
         layout=starting_layout,
         units=unit_cards,
+        gates=(gate_card, extra_gate_card),
         composition=tuple(composition),
     )
 
@@ -290,7 +311,7 @@ CARD_INDEX: Final[dict[CardId, CardDefinition]] = {
     for deck in _DECKS
     for card in (
         deck.layout.summoner[0],
-        deck.layout.gate[0],
+        *deck.gates,
         *deck.units,
     )
 }

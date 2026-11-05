@@ -13,7 +13,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from sw_cards import get_card, get_deck, known_decks
+from sw_cards import DRAW_PILE_SIZE, get_card, get_deck, known_decks
 from sw_engine.actions import (
     AttackUnit,
     BuildStructure,
@@ -133,7 +133,7 @@ def test_setup_sizes_and_magic() -> None:
     state = _state()
     for player in state.players:
         assert len(player.hand) == HAND_SIZE
-        assert len(player.deck) == 34 - HAND_SIZE
+        assert len(player.deck) == DRAW_PILE_SIZE - HAND_SIZE
     active = state.player(state.active)
     other = state.player(opponent(state.active))
     assert active.magic == STARTING_MAGIC_FIRST == 2
@@ -305,9 +305,22 @@ def test_end_of_turn_draws_back_to_five_and_passes_turn() -> None:
     assert len(after.player(start_active).hand) >= before_hand
 
 
+def _with_gate_in_hand(state: GameState, player: PlayerId) -> GameState:
+    """Put a five-life gate in hand: with a 30 card pile the deal often has none."""
+    gate_card = get_deck(DeckId("savanna_elves")).gates[1].card_id
+    seat = state.player(player)
+    hand = (gate_card, *seat.hand[:-1])
+    first, second = state.players
+    patched = tuple(
+        dataclasses.replace(p, hand=hand) if p.player == player else p for p in (first, second)
+    )
+    return dataclasses.replace(state, players=(patched[0], patched[1]))
+
+
 def test_build_only_in_back_rows_or_by_summoner() -> None:
-    state = _advance(dataclasses.replace(_state(), active=PLAYER_A), Phase.BUILD)
-    gate_card = next(c for c in state.player(PLAYER_A).hand if c.endswith("gate"))
+    base = _advance(dataclasses.replace(_state(), active=PLAYER_A), Phase.BUILD)
+    state = _advance(_with_gate_in_hand(base, PLAYER_A), Phase.BUILD)
+    gate_card = next(c for c in state.player(PLAYER_A).hand if "gate" in c)
     legal_squares = {a.position for a in legal_actions(state) if isinstance(a, BuildStructure)}
     assert Square(0, 0) in legal_squares  # back row
     assert Square(5, 7) not in legal_squares  # opponent's back row
@@ -427,3 +440,29 @@ def test_setup_is_legal_and_inside_own_half(deck_id: DeckId) -> None:
     for square in squares:
         assert square.is_on_board()
         assert 0 <= square.y <= 3, "setup cards must start inside the owner's half"
+
+
+# --------------------------------------------------------------------------------------
+# Gates — the same for every faction: starting gate costs 0 and has 10 life, the three
+# others cost 0 and have 5 life each.
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("deck_id", sorted(known_decks()))
+def test_gates_are_zero_cost_structures(deck_id: DeckId) -> None:
+    deck = get_deck(deck_id)
+    starting, extra = deck.gates
+    assert (starting.cost, starting.life, starting.strength) == (0, 10, 0)
+    assert (extra.cost, extra.life, extra.strength) == (0, 5, 0)
+    assert starting.kind is UnitKind.GATE and extra.kind is UnitKind.GATE
+    assert starting.attack is AttackKind.NONE and extra.attack is AttackKind.NONE
+    assert deck.layout.gate[0] is starting, "the ten-life gate is the one placed at setup"
+
+
+@pytest.mark.parametrize("deck_id", sorted(known_decks()))
+def test_draw_pile_holds_three_five_life_gates(deck_id: DeckId) -> None:
+    deck = get_deck(deck_id)
+    extra = deck.gates[1]
+    assert deck.composition.count(extra.card_id) == 3
+    assert deck.composition.count(deck.gates[0].card_id) == 0, "the starting gate is not drawn"
+    assert len(deck.composition) == DRAW_PILE_SIZE

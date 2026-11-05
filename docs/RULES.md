@@ -84,3 +84,15 @@ empty draw pile. Draw pile **count** is public; its **contents** are secret.
 ## Event cards — p. 9
 Play during the phase printed on the card, pay the cost, resolve, then discard. Cannot be played
 while another effect is resolving.
+
+## Gates — identical in every faction
+
+- The **starting gate** is a structure: cost **0**, life **10**. It is placed during setup
+  and never drawn.
+- The other **three gates** are structures: cost **0**, life **5** each. They sit in the
+  draw pile and are built during the Build Phase.
+- A gate is not a unit: it never moves and never attacks (`strength 0`, `attack none`).
+- Losing every gate loses the game (rulebook p.17), which is why the ten-life gate matters.
+
+Encoded in `sw_cards` as `GATE_LIFE = 10`, `GATE_LIFE_STANDARD = 5`, `GATE_COST = 0`, and
+exposed per deck as `DeckDefinition.gates = (starting_gate, five_life_gate)`.

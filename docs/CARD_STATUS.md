@@ -27,8 +27,10 @@ The deck needs 1 summoner, 2 starting units, 16 commons, 3 champions, 4 gates an
 SW Zone's setup sheet marks events as **2 copies each**, so these four fill the eight
 event slots exactly (2 epic + 6 standard).
 
-Missing for this faction: **the four gates** (one ten-life, three five-life). Everything
-else is transcribed.
+**Gates are identical across every faction** and are encoded once: the starting gate is a
+structure with cost 0 and 10 life, the other three cost 0 and have 5 life each.
+
+Cave Goblins is therefore **complete: 34 of 34 cards**.
 
 ## Still placeholders
 
