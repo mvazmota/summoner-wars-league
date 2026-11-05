@@ -7,9 +7,9 @@ import sys
 import threading
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from collections.abc import Iterator
 from typing import Any
 
 import pytest

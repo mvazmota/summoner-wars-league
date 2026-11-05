@@ -16,7 +16,8 @@ uv run python scripts/serve.py --port 8765
 
 Open `http://<this machine>:8765/`. The page lists every deck, lets you choose player A and
 player B, runs the game on the server and plays it back on the board. When the game ends an
-**end screen** appears with the verdict, the highlights and the numbers behind them (turns,
+**end screen** appears with the verdict, the **MVP of the match** (damage dealt, kills, turns
+on board, and the score behind the ranking), the highlights and the numbers behind them (turns,
 summoner life, damage, summons, losses, events, magic spent, biggest hit).
 
 The whole thing is stdlib only: `http.server` for the API (`/api/decks`, `/api/game`) and

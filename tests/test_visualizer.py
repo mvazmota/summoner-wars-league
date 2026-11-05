@@ -60,6 +60,32 @@ def test_summary_explains_the_result() -> None:
     assert report["units_summoned"]["A"] + report["units_summoned"]["B"] > 0
 
 
+def test_mvp_is_a_real_unit_with_a_reason() -> None:
+    frames = _frames()
+    report = summarise(
+        frames,
+        faction_a=REGISTRY[DeckId("cave_goblins")].faction,
+        faction_b=REGISTRY[DeckId("savanna_elves")].faction,
+        seed=3,
+    )
+
+    mvp = report["mvp"]
+    assert mvp is not None, "a played game always has units"
+    assert mvp["name"] and mvp["faction"]
+    assert mvp["score"] >= 0
+    assert mvp["damage_dealt"] >= 0 and mvp["kills"] >= 0
+    assert report["mvp_sentence"].startswith(mvp["name"])
+    assert "MVP" in report["mvp_sentence"]
+    assert any(highlight.startswith("MVP:") for highlight in report["highlights"])
+
+    scores = [unit["score"] for unit in report["units"]]
+    assert scores == sorted(scores, reverse=True), "ranking must be ordered"
+
+    keys = {(unit["owner"], unit["name"]) for unit in report["units"]}
+    assert len(keys) == len(report["units"]), "one row per card per side"
+    assert all(unit["instances"] >= 1 for unit in report["units"])
+
+
 def test_template_has_the_data_placeholder() -> None:
     assert "__REPLAY_DATA__" in WEB_TEMPLATE.read_text(encoding="utf-8")
 

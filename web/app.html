@@ -88,6 +88,14 @@
   .sheet .verdict { margin: 12px 0 18px; color: #ddd2c4; }
   .sheet ul { margin: 0 0 18px; padding-left: 18px; }
   .sheet li { margin-bottom: 6px; }
+  .mvp { background: linear-gradient(180deg, #2b2419, #221d19); border: 1px solid var(--gold);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+  .mvp .tag { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+  .mvp .who { font-size: 20px; font-weight: 700; margin: 2px 0 6px; }
+  .mvp .why { color: #ddd2c4; margin: 0; }
+  .mvp table { margin-top: 12px; }
+  .mvp td, .mvp th { padding: 3px 8px 3px 0; }
+  .mvp .num { font-variant-numeric: tabular-nums; text-align: right; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 10px; margin-bottom: 20px; }
   .stat { background: #221d19; border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
@@ -176,6 +184,12 @@
     <div class="winner" id="endWinner"></div>
     <h2 id="endTitle"></h2>
     <p class="verdict" id="endVerdict"></p>
+    <div class="mvp" id="mvpBox" hidden>
+      <div class="tag">MVP da partida</div>
+      <div class="who" id="mvpName"></div>
+      <p class="why" id="mvpWhy"></p>
+      <table id="mvpTable"></table>
+    </div>
     <ul id="endHighlights"></ul>
     <div class="stats" id="endStats"></div>
     <div class="actions">
@@ -403,6 +417,8 @@
     $("endTitle").textContent = winnerName || "Empate";
     $("endVerdict").textContent = report.verdict;
 
+    renderMvp(report);
+
     var list = $("endHighlights");
     list.textContent = "";
     report.highlights.forEach(function (item) { list.appendChild(el("li", null, item)); });
@@ -429,6 +445,35 @@
     });
 
     end.classList.add("show");
+  }
+
+  function renderMvp(report) {
+    var box = $("mvpBox");
+    var mvp = report.mvp;
+    if (!mvp) { box.hidden = true; return; }
+    box.hidden = false;
+    $("mvpName").textContent = mvp.name + " · " + mvp.faction;
+    $("mvpWhy").textContent = report.mvp_sentence;
+
+    var table = $("mvpTable");
+    table.textContent = "";
+    var head = document.createElement("tr");
+    ["", "unidade", "dano", "kills", "turnos", "pontos"].forEach(function (title, i) {
+      var th = el("th", i > 1 ? "num" : null, title);
+      head.appendChild(th);
+    });
+    table.appendChild(head);
+
+    (report.units || []).slice(0, 5).forEach(function (unit) {
+      var tr = document.createElement("tr");
+      tr.appendChild(el("td", null, "#" + unit.rank));
+      tr.appendChild(el("td", null, unit.name + (unit.instances > 1 ? " (x" + unit.instances + ")" : "")));
+      tr.appendChild(el("td", "num", String(unit.damage_dealt)));
+      tr.appendChild(el("td", "num", String(unit.kills)));
+      tr.appendChild(el("td", "num", String(unit.turns_on_board)));
+      tr.appendChild(el("td", "num", String(unit.score)));
+      table.appendChild(tr);
+    });
   }
 
   $("replay").addEventListener("click", function () {

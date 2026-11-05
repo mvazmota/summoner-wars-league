@@ -43,6 +43,7 @@ def summarise(
     peak_board = {side: 0 for side in SIDES}
     biggest_hit: dict[str, Any] | None = None
     leader_changes = 0
+    tracked: dict[int, dict[str, Any]] = {}
 
     previous = frames[0]["state"]
     previous_leader = _leader(previous)
@@ -62,6 +63,42 @@ def summarise(
 
         before = _units_by_id(previous)
         after = _units_by_id(state)
+
+        for unit_id, unit in after.items():
+            if not _is_battle_unit(unit):
+                continue
+            record = tracked.get(unit_id)
+            if record is None:
+                tracked[unit_id] = {
+                    "id": unit_id,
+                    "name": unit["name"],
+                    "owner": _side(unit["owner"]),
+                    "faction": names[_side(unit["owner"])],
+                    "damage_dealt": 0,
+                    "kills": 0,
+                    "damage_taken": 0,
+                    "first_turn": state["turn"],
+                    "last_turn": state["turn"],
+                    "boosts": unit["boosts"],
+                    "life": unit["life"],
+                    "survived": False,
+                }
+            else:
+                record["last_turn"] = state["turn"]
+                record["boosts"] = max(record["boosts"], unit["boosts"])
+
+        if kind == "AttackUnit":
+            attacker = tracked.get(int(action.get("attacker") or -1))
+            victim_id = int(action.get("target") or -1)
+            victim_before = before.get(victim_id)
+            if attacker is not None and victim_before is not None:
+                victim_after = after.get(victim_id)
+                if victim_after is None:
+                    dealt = max(0, victim_before["life"] - victim_before["damage"])
+                    attacker["kills"] += 1
+                else:
+                    dealt = max(0, victim_after["damage"] - victim_before["damage"])
+                attacker["damage_dealt"] += dealt
         for unit_id, unit in before.items():
             if unit_id in after:
                 continue
@@ -75,6 +112,8 @@ def summarise(
             if old is None:
                 continue
             gained = unit["damage"] - old["damage"]
+            if gained > 0 and unit_id in tracked:
+                tracked[unit_id]["damage_taken"] += gained
             if gained > 0:
                 damage_taken[_side(1 - unit["owner"])] += gained
                 if unit["kind"] == "SUMMONER":
@@ -124,9 +163,82 @@ def summarise(
         "biggest_hit": biggest_hit,
         "leader_changes": leader_changes,
     }
+    for unit in final["units"]:
+        record = tracked.get(unit["id"])
+        if record is not None:
+            record["survived"] = bool(unit["life"] > unit["damage"])
+
+    report["units"] = _rank_units(tracked)
+    report["mvp"] = report["units"][0] if report["units"] else None
+    report["mvp_sentence"] = mvp_sentence(report["mvp"]) if report["mvp"] else ""
     report["highlights"] = _highlights(report, names)
     report["verdict"] = _verdict(report, names, winner, loser)
     return report
+
+
+def _score(record: dict[str, Any]) -> float:
+    """One number for a unit's match: damage, kills, longevity, survival and boosts.
+
+    Deliberately simple and readable — the components are all shown in the end screen, so
+    the ranking can be argued with instead of trusted blindly.
+    """
+    turns = int(record["last_turn"]) - int(record["first_turn"]) + 1
+    return round(
+        2.0 * int(record["damage_dealt"])
+        + 3.0 * int(record["kills"])
+        + 0.3 * turns
+        + (4.0 if record["survived"] else 0.0)
+        + 0.5 * int(record["boosts"]),
+        1,
+    )
+
+
+def _rank_units(tracked: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Best instance of each card per side, so the table reads as cards, not clones.
+
+    A faction holds four copies of a common and they are separate units on purpose, but
+    three identical rows in an "MVP" list tell the reader nothing. The best instance wins
+    the row and the count travels along.
+    """
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    counts: dict[tuple[str, str], int] = {}
+    for record in tracked.values():
+        entry = dict(record)
+        entry["turns_on_board"] = int(record["last_turn"]) - int(record["first_turn"]) + 1
+        entry["score"] = _score(record)
+        key = (str(entry["owner"]), str(entry["name"]))
+        counts[key] = counts.get(key, 0) + 1
+        current = best.get(key)
+        if current is None or (entry["score"], entry["damage_dealt"]) > (
+            current["score"],
+            current["damage_dealt"],
+        ):
+            best[key] = entry
+
+    ranked = []
+    for key, entry in best.items():
+        entry["instances"] = counts[key]
+        ranked.append(entry)
+    ranked.sort(key=lambda item: (-item["score"], -item["damage_dealt"], item["id"]))
+    for position, entry in enumerate(ranked, start=1):
+        entry["rank"] = position
+    return ranked
+
+
+def mvp_sentence(mvp: dict[str, Any]) -> str:
+    """A one-liner for the end screen, in the same PT-PT voice as the rest."""
+    bits = [
+        f"{mvp['damage_dealt']} de dano",
+        f"{mvp['kills']} unidade{'s' if mvp['kills'] != 1 else ''} destruída"
+        f"{'s' if mvp['kills'] != 1 else ''}",
+    ]
+    if mvp["survived"]:
+        bits.append("sobreviveu ao jogo")
+    else:
+        bits.append(f"caiu ao turno {mvp['last_turn']}")
+    if mvp["boosts"]:
+        bits.append(f"{mvp['boosts']} boosts")
+    return f"{mvp['name']} ({mvp['faction']}) foi o MVP: " + ", ".join(bits) + "."
 
 
 def _leader(state: dict[str, Any]) -> str | None:
@@ -141,6 +253,13 @@ def _leader(state: dict[str, Any]) -> str | None:
 
 def _highlights(report: dict[str, Any], names: dict[str, str]) -> list[str]:
     items: list[str] = []
+    if report.get("mvp"):
+        mvp = report["mvp"]
+        items.append(
+            f"MVP: {mvp['name']} ({mvp['faction']}) com {mvp['score']} pontos — "
+            f"{mvp['damage_dealt']} de dano, {mvp['kills']} kills, "
+            f"{mvp['turns_on_board']} turnos em jogo."
+        )
     winner = report["winner"]
     if winner:
         left = report["life_left"][winner]
