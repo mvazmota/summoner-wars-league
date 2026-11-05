@@ -155,7 +155,7 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
         summoner="Abua Shi",
         units=(
             ("lioness", "Lioness", AttackKind.MELEE, 2, 3, 4),
-            ("archer", "Archer", AttackKind.RANGED, 2, 2, 2),
+            ("border_archer", "Border Archer", AttackKind.RANGED, 2, 2, 2),
         ),
         layout=((4, 0), (4, 1), ((3, 0), (3, 3))),
     ),
@@ -164,8 +164,8 @@ _DECKS: Final[tuple[DeckDefinition, ...]] = (
         "Vanguards",
         summoner="Sera",
         units=(
-            ("priest", "Priest", AttackKind.MELEE, 2, 2, 2),
-            ("knight", "Knight", AttackKind.MELEE, 3, 5, 4),
+            ("temple_priest", "Temple Priest", AttackKind.MELEE, 2, 2, 2),
+            ("citadel_knight", "Citadel Knight", AttackKind.MELEE, 3, 5, 4),
         ),
         layout=((4, 0), (4, 2), ((5, 2), (3, 3))),
     ),

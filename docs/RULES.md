@@ -60,10 +60,22 @@ opponent's turn begins. p. 9
 A player loses if their **summoner leaves the battlefield** (e.g. is destroyed). There is no
 separate score.
 
-## Deck construction — p. 12, 14
-Each faction deck is 34 cards: 16 commons (max 4 copies of each) and up to 4 champions, plus
-events and structures; **starting units do not count** against those limits. Single copy of
-each **limited** card.
+## Deck construction — p. 12, 14 and SW Zone's deck-construction reference
+Each faction deck is 34 cards, made of:
+
+- 1 **summoner**
+- 1 **ten-life gate** plus 3 **five-life gates**
+- the **2 starting units** printed on the back of the summoner card (not in the draw pile)
+- the **2 epic events** printed on the summoner card back
+- **6 standard events**
+- **3 champion units**
+- **16 common units** (max 4 copies of each)
+- no more than 1 copy of each **limited** card
+
+Every card must share at least one deck symbol with its summoner.
+
+The engine currently models only summoners, gates and units: events and champions are not
+playable yet, so the placeholder composition is units + gates only (see `sw_cards`).
 
 ## Draw pile — p. 11
 If a draw pile is empty, **do not reshuffle** the discard pile. A player cannot draw with an

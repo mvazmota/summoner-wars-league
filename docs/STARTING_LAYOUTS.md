@@ -11,14 +11,24 @@ the summoner (always the bottom-most card, row 0) and to the gate. All six layou
 Status: `confirmed` = checked by the owner against the physical card; `unconfirmed` =
 read from a photo and awaiting confirmation.
 
+Card names below were verified against SW Zone's per-faction setup sheets
+(`/faction/<faction>/overview/pdf`); positions come from the owner's photos.
+
 | Faction | Summoner | Gate | Unit 1 | Unit 2 | Status |
 |---|---|---|---|---|---|
-| Savanna Elves | Abua Shi (4,0) | (4,1) | Lioness (3,0) | Archer (3,3) | confirmed |
+| Savanna Elves | Abua Shi (4,0) | (4,1) | Lioness (3,0) | Border Archer (3,3) | confirmed |
 | Cave Goblins | Sneeks (5,0) | (4,1) | Slinger (5,1) | Beast Rider (3,3) | confirmed |
 | Shadow Elves | Taculla (3,0) | (4,1) | Mind Witch (3,1) | Deceiver (5,3) | confirmed |
-| Vanguards | Sera (4,0) | (4,2) | Priest (5,2) | Knight (3,3) | confirmed |
+| Vanguards | Sera (4,0) | (4,2) | Temple Priest (5,2) | Citadel Knight (3,3) | confirmed |
 | Fallen Kingdom | Ret-Talus (4,0) | (4,2) | Archer (3,1) | Carrier (3,2) | confirmed |
 | Polar Dwarves | Svara (4,0) | (4,2) | Ice Golem (3,1) | Frost Mage (3,2) | confirmed |
+
+## Open conflict: Shadow Elves
+
+The photo shows **Mind Witch** and **Deceiver** as the two starting units, and the owner
+confirmed those positions. SW Zone's setup sheet for Shadow Elves lists **Sage Ranger** and
+**Shadow Mage** instead. One of the two sources is wrong (or describes a different printing),
+so the engine currently follows the photo. Needs resolving before card stats are encoded.
 
 ## Invariants every layout must satisfy
 
