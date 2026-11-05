@@ -26,6 +26,7 @@ from sw_engine.actions import (
     EndPhase,
     MoveUnit,
     PlayEvent,
+    SlySwap,
     SummonUnit,
 )
 from sw_engine.dice import hits, roll
@@ -59,6 +60,7 @@ RANGED_RANGE = 3
 # Rulebook p.7: a unit moves 1 or 2 spaces per Move Phase.
 MAX_MOVE_DISTANCE = 2
 CHARGE_DISTANCE = 4  # Beast Rider: may move 1 to 4 clear straight spaces instead
+MAX_BOOSTS = 5  # Blarf: +1 strength per boost, never more than +5
 
 
 class Outcome(Enum):
@@ -291,14 +293,17 @@ def _own_gates(state: GameState, player: PlayerId) -> tuple[UnitState, ...]:
     return tuple(u for u in state.units if u.owner == player and u.kind is UnitKind.GATE)
 
 
-def _adjacent_empties(state: GameState, square: Square) -> list[Square]:
-    candidates = (
+def _adjacent_squares(square: Square) -> list[Square]:
+    return [
         Square(square.x + 1, square.y),
         Square(square.x - 1, square.y),
         Square(square.x, square.y + 1),
         Square(square.x, square.y - 1),
-    )
-    return [c for c in candidates if state.is_empty(c)]
+    ]
+
+
+def _adjacent_empties(state: GameState, square: Square) -> list[Square]:
+    return [c for c in _adjacent_squares(square) if state.is_empty(c)]
 
 
 def _summon_squares(state: GameState, player: PlayerId) -> list[Square]:
@@ -328,7 +333,9 @@ def _build_squares(state: GameState, player: PlayerId) -> list[Square]:
     return squares
 
 
-def _path_is_clear(state: GameState, origin: Square, target: Square) -> bool:
+def _path_is_clear(
+    state: GameState, origin: Square, target: Square, *, through_structures: bool = False
+) -> bool:
     """True when every space strictly between origin and target is empty.
 
     Returns False for anything that is not a straight horizontal or vertical line.
@@ -339,8 +346,11 @@ def _path_is_clear(state: GameState, origin: Square, target: Square) -> bool:
     step_y = (target.y > origin.y) - (target.y < origin.y)
     x, y = origin.x + step_x, origin.y + step_y
     while (x, y) != (target.x, target.y):
-        if not state.is_empty(Square(x, y)):
-            return False
+        blocker = state.occupant(Square(x, y))
+        if blocker is not None:
+            passes = through_structures and blocker.kind in (UnitKind.STRUCTURE, UnitKind.GATE)
+            if not passes:
+                return False
         x += step_x
         y += step_y
     return True
@@ -370,10 +380,13 @@ def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -
     if not to.is_on_board() or not state.is_empty(to):
         return False
     distance = unit.position.distance_to(to)
+    climb = _has_ability(unit.card, "Climb")
     limit = CHARGE_DISTANCE if _has_ability(unit.card, "Charge") else MAX_MOVE_DISTANCE
+    if climb:
+        limit += 1
     if distance < 1 or distance > limit:
         return False
-    return _path_is_clear(state, unit.position, to)
+    return _path_is_clear(state, unit.position, to, through_structures=climb)
 
 
 def _can_attack(state: GameState, attacker: UnitState, target: UnitState, player: PlayerId) -> bool:
@@ -449,6 +462,15 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
 
     elif state.phase is Phase.MAGIC:
         actions.extend(DiscardForMagic(card_id) for card_id in player_state.hand)
+
+    if state.phase is Phase.ATTACK and not state.sly_used:
+        summoner = state.summoner(player)
+        if _has_ability(summoner.card, "Sly"):
+            actions.extend(
+                SlySwap(unit.unit_id)
+                for unit in _zero_cost_units(state, player)
+                if unit.unit_id != summoner.unit_id
+            )
 
     # Events are legal on the phase printed on the card, so this check spans phases.
     for card_id in player_state.hand:
@@ -555,9 +577,42 @@ def _move(state: GameState, action: MoveUnit) -> GameState:
     unit = state.unit(action.unit_id)
     if not _can_move(state, unit, action.to, state.active):
         raise RulesError(f"{action.unit_id!r} cannot move to {action.to!r}")
+    origin = unit.position
     moved_unit = replace(unit, position=action.to)
     units = tuple(moved_unit if u.unit_id == unit.unit_id else u for u in state.units)
-    return replace(state, units=units, moved=(*state.moved, unit.unit_id))
+    state = replace(state, units=units, moved=(*state.moved, unit.unit_id))
+    return _apply_cling(state, unit, origin, action.to)
+
+
+def _apply_cling(
+    state: GameState, mover: UnitState, origin: Square, destination: Square
+) -> GameState:
+    """Horde Clinger follows a friendly unit that started its move next to it.
+
+    The card says "you may"; the engine moves it whenever a legal square exists, because
+    optional triggers need an action of their own and the action space is not there yet.
+    """
+    clingers = [
+        unit
+        for unit in state.units
+        if unit.owner == mover.owner
+        and unit.unit_id != mover.unit_id
+        and _has_ability(unit.card, "Cling")
+        and unit.position.is_adjacent_to(origin)
+    ]
+    if not clingers:
+        return state
+
+    occupied = {unit.position for unit in state.units}
+    units = list(state.units)
+    for clinger in clingers:
+        for square in _adjacent_squares(destination):
+            if square.is_on_board() and square not in occupied:
+                occupied.add(square)
+                index = next(i for i, u in enumerate(units) if u.unit_id == clinger.unit_id)
+                units[index] = replace(clinger, position=square)
+                break
+    return replace(state, units=tuple(units))
 
 
 def _apply_damage(state: GameState, target: UnitState, amount: int) -> GameState:
@@ -605,6 +660,7 @@ def _attack(state: GameState, action: AttackUnit) -> GameState:
     was_destroyed = damage > 0 and all(u.unit_id != target.unit_id for u in after.units)
     if was_destroyed:
         after = _with_player(after, _gain_magic(after.player(state.active), 1))
+        after = replace(after, destroyed_by=(*after.destroyed_by, attacker.unit_id))
 
     return replace(
         after,
@@ -654,9 +710,79 @@ def _play_event(state: GameState, action: PlayEvent) -> GameState:
     return _with_player(state, player_state)
 
 
+def _sly_swap(state: GameState, action: SlySwap) -> GameState:
+    """Sneeks exchanges places with a friendly 0 cost unit, once per turn."""
+    player = state.active
+    summoner = state.summoner(player)
+    target = state.unit(action.target)
+    if state.sly_used or target.owner != player or target.unit_id == summoner.unit_id:
+        raise RulesError("Sly is not available for that unit")
+    if get_card(target.card).cost != 0:
+        raise RulesError("Sly only swaps with a 0 cost unit")
+    units = tuple(
+        replace(unit, position=target.position)
+        if unit.unit_id == summoner.unit_id
+        else replace(unit, position=summoner.position)
+        if unit.unit_id == target.unit_id
+        else unit
+        for unit in state.units
+    )
+    return replace(state, units=units, sly_used=True)
+
+
+def _start_of_attack_phase(state: GameState) -> GameState:
+    """Blarf's Blood Runes: spend 1 magic for a boost, or take 1 damage (p.12)."""
+    for unit in tuple(state.units):
+        if unit.owner != state.active or not _has_ability(unit.card, "Blood Runes"):
+            continue
+        seat = state.player(unit.owner)
+        if seat.magic >= 1 and unit.boosts < MAX_BOOSTS:
+            state = _with_player(state, _spend_magic(seat, 1))
+            units = tuple(
+                replace(u, boosts=u.boosts + 1) if u.unit_id == unit.unit_id else u
+                for u in state.units
+            )
+            state = replace(state, units=units)
+        else:
+            state = _apply_damage(state, state.unit(unit.unit_id), 1)
+    return state
+
+
+def _end_of_attack_phase(state: GameState) -> GameState:
+    """The Eater: if it destroyed nothing this turn, it eats a neighbour or itself (p.12)."""
+    for unit in tuple(state.units):
+        if unit.owner != state.active or not _has_ability(unit.card, "Feed the Eater"):
+            continue
+        if unit.unit_id in state.destroyed_by:
+            continue
+        neighbours = [
+            other
+            for other in state.units
+            if other.owner == unit.owner
+            and other.unit_id != unit.unit_id
+            and other.position.is_adjacent_to(unit.position)
+        ]
+        victim = min(neighbours, key=lambda u: int(u.unit_id), default=unit)
+        state = replace(state, units=tuple(u for u in state.units if u.unit_id != victim.unit_id))
+    return state
+
+
+def _end_of_turn_triggers(state: GameState) -> GameState:
+    """Smeg's Magic Junkie: pay 1 magic at the end of your turn or be discarded (p.12)."""
+    for unit in tuple(state.units):
+        if unit.owner != state.active or not _has_ability(unit.card, "Magic Junkie"):
+            continue
+        seat = state.player(unit.owner)
+        if seat.magic >= 1:
+            state = _with_player(state, _spend_magic(seat, 1))
+        else:
+            state = replace(state, units=tuple(u for u in state.units if u.unit_id != unit.unit_id))
+    return state
+
+
 def _effective_strength(state: GameState, attacker: UnitState, target: UnitState) -> int:
     """Printed strength plus any bonuses the active events grant (Pile On's Gang Up)."""
-    strength = attacker.strength
+    strength = attacker.strength + attacker.boosts
     if PILE_ON in _active_cards(state, attacker.owner):
         strength += sum(
             1
@@ -696,11 +822,16 @@ def _end_phase(state: GameState) -> GameState:
         return state
 
     if state.phase is Phase.ATTACK:
+        state = _end_of_attack_phase(state)
         state = _apply_cost_of_inaction(state)
         if is_terminal(state):
             return state
 
     if state.phase is Phase.MAGIC:
+        # End of turn triggers resolve before the draw step.
+        state = _end_of_turn_triggers(state)
+        if is_terminal(state):
+            return state
         # Draw step, then hand the turn over (rulebook p.9).
         state = _with_player(state, _draw_up_to_hand_size(state.player(state.active)))
         if is_terminal(state):
@@ -714,6 +845,8 @@ def _end_phase(state: GameState) -> GameState:
             attacked=(),
             attacked_any=False,
             extra_attackers=(),
+            destroyed_by=(),
+            sly_used=False,
         )
         incoming = state.player(state.active)
         if incoming.active_events:
@@ -729,7 +862,11 @@ def _end_phase(state: GameState) -> GameState:
         return state
 
     index = _PHASE_ORDER.index(state.phase)
-    return replace(state, phase=_PHASE_ORDER[index + 1])
+    next_phase = _PHASE_ORDER[index + 1]
+    state = replace(state, phase=next_phase)
+    if next_phase is Phase.ATTACK:
+        state = _start_of_attack_phase(state)
+    return state
 
 
 def step(state: GameState, action: Action) -> GameState:
@@ -752,6 +889,8 @@ def step(state: GameState, action: Action) -> GameState:
             return _discard_for_magic(state, action)
         case PlayEvent():
             return _play_event(state, action)
+        case SlySwap():
+            return _sly_swap(state, action)
     raise RulesError(f"unhandled action type: {type(action).__name__}")
 
 

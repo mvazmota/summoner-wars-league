@@ -67,6 +67,20 @@ class PlayEvent:
     targets: tuple[UnitId, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class SlySwap:
+    """Sneeks' Sly: swap places with a friendly 0 cost unit, once per turn (p.12)."""
+
+    target: UnitId
+
+
 type Action = (
-    EndPhase | SummonUnit | BuildStructure | MoveUnit | AttackUnit | DiscardForMagic | PlayEvent
+    SlySwap
+    | EndPhase
+    | SummonUnit
+    | BuildStructure
+    | MoveUnit
+    | AttackUnit
+    | DiscardForMagic
+    | PlayEvent
 )

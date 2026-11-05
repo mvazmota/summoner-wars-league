@@ -13,7 +13,7 @@ from typing import Final
 import pytest
 
 from sw_core import AttackKind, CardId, Phase, PlayerId, Square, UnitId, UnitKind
-from sw_engine.actions import AttackUnit, EndPhase, MoveUnit, PlayEvent
+from sw_engine.actions import AttackUnit, EndPhase, MoveUnit, PlayEvent, SlySwap
 from sw_engine.engine import (
     RulesError,
     _effective_strength,
@@ -229,3 +229,108 @@ def test_relentless_attacks_even_after_the_three_unit_limit() -> None:
     state = dataclasses.replace(state, attacked=(UnitId(110), UnitId(111), UnitId(112)))
     attacks = [a for a in legal_actions(state) if isinstance(a, AttackUnit)]
     assert any(a.attacker == slinger.unit_id for a in attacks)
+
+
+# --------------------------------------------------------------------------------------
+# The remaining Cave Goblins abilities
+# --------------------------------------------------------------------------------------
+
+CLINGER: Final[CardId] = CardId("cave_goblins-horde_clinger")
+BLARF: Final[CardId] = CardId("cave_goblins-blarf")
+SMEG: Final[CardId] = CardId("cave_goblins-smeg")
+EATER: Final[CardId] = CardId("cave_goblins-the_eater")
+SNEEKS: Final[CardId] = CardId("cave_goblins-sneeks")
+
+
+def test_climb_moves_three_spaces_and_passes_a_gate() -> None:
+    climber = _unit(100, CLIMBER, Square(2, 1))
+    state = _battle((climber,), phase=Phase.MOVE)
+    squares = {
+        a.to
+        for a in legal_actions(state)
+        if isinstance(a, MoveUnit) and a.unit_id == climber.unit_id
+    }
+    assert Square(2, 4) in squares, "climb moves one extra space"
+
+    # A gate between origin and destination blocks everyone else but not the climber.
+    base = _base()
+    gate = next(u for u in base.units if u.kind is UnitKind.GATE and u.owner == PLAYER_B)
+    blocked = dataclasses.replace(state, units=(*state.units, gate))
+    through = {
+        a.to
+        for a in legal_actions(blocked)
+        if isinstance(a, MoveUnit) and a.unit_id == climber.unit_id
+    }
+    assert any(square.x == gate.position.x for square in through)
+
+
+def test_cling_follows_a_friendly_unit_that_moved_away() -> None:
+    mover = _unit(100, CLIMBER, Square(2, 2))
+    clinger = _unit(101, CLINGER, Square(2, 1))
+    state = _battle((mover, clinger), phase=Phase.MOVE)
+
+    after = step(state, MoveUnit(mover.unit_id, Square(2, 4)))
+
+    moved = after.unit(clinger.unit_id)
+    assert moved.position.is_adjacent_to(Square(2, 4))
+    assert moved.position != Square(2, 1)
+
+
+def test_sly_swaps_sneeks_with_a_zero_cost_unit_once_per_turn() -> None:
+    base = _base()
+    summoner = base.summoner(PLAYER_A)
+    climber = _unit(100, CLIMBER, Square(2, 2))
+    state = _battle((climber,), phase=Phase.ATTACK)
+
+    swaps = [a for a in legal_actions(state) if isinstance(a, SlySwap)]
+    assert swaps == [SlySwap(climber.unit_id)]
+
+    after = step(state, swaps[0])
+    assert after.unit(summoner.unit_id).position == Square(2, 2)
+    assert after.unit(climber.unit_id).position == summoner.position
+    assert not any(isinstance(a, SlySwap) for a in legal_actions(after)), "once per turn"
+
+
+def test_blood_runes_spends_magic_for_a_boost_then_falls_back_to_damage() -> None:
+    blarf = _unit(100, BLARF, Square(3, 2), strength=0, life=6)
+    state = _battle((blarf,), phase=Phase.BUILD, magic=5)
+
+    after = step(state, EndPhase())  # BUILD -> ATTACK
+    boosted = after.unit(blarf.unit_id)
+    assert after.phase is Phase.ATTACK
+    assert boosted.boosts == 1 and after.player(PLAYER_A).magic == 4
+
+    broke = _battle((blarf,), phase=Phase.BUILD, magic=0)
+    after_broke = step(broke, EndPhase())
+    assert after_broke.unit(blarf.unit_id).damage == 1, "no magic means one damage instead"
+
+
+def test_magic_junkie_pays_or_is_discarded_at_the_end_of_the_turn() -> None:
+    smeg = _unit(100, SMEG, Square(3, 2), life=4)
+    rich = _battle((smeg,), phase=Phase.MAGIC, magic=3)
+    after = step(rich, EndPhase())
+    assert any(u.unit_id == smeg.unit_id for u in after.units)
+    assert after.player(PLAYER_A).magic == 2
+
+    poor = _battle((smeg,), phase=Phase.MAGIC, magic=0)
+    after_poor = step(poor, EndPhase())
+    assert all(u.unit_id != smeg.unit_id for u in after_poor.units)
+
+
+def test_the_eater_discards_a_neighbour_when_it_destroyed_nothing() -> None:
+    eater = _unit(100, EATER, Square(3, 2), strength=5, life=9)
+    snack = _unit(101, CLIMBER, Square(3, 1))
+    state = _battle((eater, snack), phase=Phase.ATTACK)
+
+    after = step(state, EndPhase())
+
+    assert any(u.unit_id == eater.unit_id for u in after.units)
+    assert all(u.unit_id != snack.unit_id for u in after.units), "the neighbour is eaten"
+
+
+def test_the_eater_eats_itself_when_alone() -> None:
+    eater = _unit(100, EATER, Square(3, 2), strength=5, life=9)
+    state = _battle((eater,), phase=Phase.ATTACK)
+
+    after = step(state, EndPhase())
+    assert all(u.unit_id != eater.unit_id for u in after.units)

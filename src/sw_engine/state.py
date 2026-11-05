@@ -55,6 +55,7 @@ class UnitState:
     strength: int
     life: int
     damage: int = 0
+    boosts: int = 0  # Blarf's Blood Runes: +1 strength each, to a maximum of +5
 
     def is_alive(self) -> bool:
         return self.damage < self.life
@@ -103,6 +104,8 @@ class GameState:
     attacked: tuple[UnitId, ...] = ()
     attacked_any: bool = False
     extra_attackers: tuple[UnitId, ...] = ()
+    destroyed_by: tuple[UnitId, ...] = ()
+    sly_used: bool = False
 
     def player(self, player: PlayerId) -> PlayerState:
         for state in self.players:
@@ -155,6 +158,7 @@ class GameState:
                 u.strength,
                 u.life,
                 u.damage,
+                u.boosts,
             )
             for u in sorted(self.units, key=lambda u: (u.owner, u.unit_id))
         )
@@ -170,6 +174,8 @@ class GameState:
             tuple(sorted(self.attacked)),
             self.attacked_any,
             tuple(sorted(self.extra_attackers)),
+            tuple(sorted(self.destroyed_by)),
+            self.sly_used,
         )
 
     def state_hash(self) -> str:

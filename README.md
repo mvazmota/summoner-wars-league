@@ -17,8 +17,8 @@ and [`docs/STARTING_LAYOUTS.md`](./docs/STARTING_LAYOUTS.md). The engine plays f
 summon, move, build, attack with dice, magic, draw. Card data is transcribed by hand into `data/cards/*.json` — see
 [`docs/CARD_STATUS.md`](./docs/CARD_STATUS.md) for what is verified and what is still a
 placeholder;
-cards now play their printed events, and the four
-Cave Goblins events plus Charge, Immobile and Relentless are wired into the rules —
+cards now play their printed events, and every
+Cave Goblins card — events and abilities — is wired into the rules —
 [`docs/MECHANICS.md`](./docs/MECHANICS.md) lists what runs and what is still just text. Next milestone: **M3 — card data and effect DSL** (M2 fuzzing
 runs alongside).
 
@@ -28,7 +28,7 @@ Verified on this machine:
 uv sync
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-uv run pytest -m "not slow"       # 69 passed
+uv run pytest -m "not slow"       # 76 passed
 uv run python -m sw_engine.smoke  # prints the canonical state hash
 ```
 
