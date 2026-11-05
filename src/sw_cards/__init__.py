@@ -92,6 +92,8 @@ class VerifiedCard(TypedDict):
     strength: int | None
     ability: str | None
     ability_name: NotRequired[str]
+    copies: NotRequired[int | None]
+    phase: NotRequired[str | None]
     source: NotRequired[str]
 
 

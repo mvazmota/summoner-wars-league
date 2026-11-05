@@ -19,13 +19,16 @@ The deck needs 1 summoner, 2 starting units, 16 commons, 3 champions, 4 gates an
 | Blarf | Champion | 0 | 6 | 0 melee | Blood Runes / Imbued Strength | yes |
 | Smeg | Champion | 0 | 4 | 2 ranged | Magic Junkie / Relentless | yes |
 | The Eater | Champion | 6 | 9 | 5 melee | Feed the Eater | yes |
-| Enrage the Horde | Epic Event | 1 | — | — | — | yes |
-| Unrelenting | Standard Event | 1 | — | — | Active | yes |
-| Pile On | Standard Event | 0 | — | — | Gang Up | yes, wording partly uncertain |
-| Sneak | Standard Event | 0 | — | — | — | yes |
+| Enrage the Horde | Epic Event (phase unknown) | 1 | — | — | — | yes |
+| Unrelenting | Standard Event (Magic Phase) | 1 | — | — | Active | yes |
+| Pile On | Standard Event (Attack Phase) | 0 | — | — | Active / Gang Up | yes |
+| Sneak | Standard Event (Move Phase) | 0 | — | — | — | yes |
 
-Missing for this faction: **1 epic event, 3 standard events and the four gates**
-(one ten-life, three five-life).
+SW Zone's setup sheet marks events as **2 copies each**, so these four fill the eight
+event slots exactly (2 epic + 6 standard).
+
+Missing for this faction: **the four gates** (one ten-life, three five-life). Everything
+else is transcribed.
 
 ## Still placeholders
 

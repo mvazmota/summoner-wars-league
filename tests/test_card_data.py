@@ -65,6 +65,20 @@ def test_transcribed_stats_reach_the_engine() -> None:
     assert (summoner.name, summoner.life, summoner.strength) == ("Sneeks", 11, 3)
 
 
+def test_event_slots_add_up_to_the_deck_requirement() -> None:
+    """A 34 card deck carries 8 events: 2 epic plus 6 standard."""
+    events = {
+        name: entry
+        for name, entry in load_verified_cards(DeckId("cave_goblins")).items()
+        if entry["card_class"].endswith("Event")
+    }
+    total = sum(entry.get("copies") or 1 for entry in events.values())
+    assert total == 8, f"events cover {total} of the 8 slots"
+    epic = [n for n, e in events.items() if e["card_class"] == "Epic Event"]
+    standard = [n for n, e in events.items() if e["card_class"] == "Standard Event"]
+    assert len(epic) >= 1 and len(standard) == 3, (epic, standard)
+
+
 def test_goblins_have_the_full_roster_of_commons() -> None:
     commons = {
         name
