@@ -15,8 +15,11 @@ from sw_engine.actions import (
     Action,
     AttackUnit,
     BuildStructure,
+    CommandAlly,
     DiscardForMagic,
     EndPhase,
+    ForceUnit,
+    MimicAbility,
     MoveUnit,
     PlayEvent,
     SlySwap,
@@ -78,6 +81,12 @@ def describe(action: Action) -> str:
             return f"Play {get_card(card).name}{suffix}"
         case SlySwap(target):
             return f"Sly: swap with unit {target}"
+        case ForceUnit(source, target, dx, dy):
+            return f"Unit {source} forces {target} by ({dx},{dy})"
+        case CommandAlly(source, target):
+            return f"Unit {source} commands {target} to attack again"
+        case MimicAbility(unit, target):
+            return f"Unit {unit} mimics unit {target}"
         case EndPhase():
             return "End phase"
 
@@ -92,6 +101,12 @@ def describe_action(action: Action) -> dict[str, object]:
             payload.update(card=str(card), cost=get_card(card).cost)
         case PlayEvent(card, _targets):
             payload.update(card=str(card), cost=get_card(card).cost, name=get_card(card).name)
+        case ForceUnit(source, target, dx, dy):
+            payload.update(source=int(source), target=int(target), dx=dx, dy=dy)
+        case CommandAlly(source, target):
+            payload.update(source=int(source), target=int(target))
+        case MimicAbility(unit, target):
+            payload.update(source=int(unit), target=int(target))
         case AttackUnit(attacker, target):
             payload.update(attacker=int(attacker), target=int(target))
         case SlySwap(target):

@@ -56,6 +56,7 @@ class UnitState:
     life: int
     damage: int = 0
     boosts: int = 0  # Blarf's Blood Runes: +1 strength each, to a maximum of +5
+    extra_ability: str = ""  # Mimic: abilities copied for the rest of the turn
 
     def is_alive(self) -> bool:
         return self.damage < self.life
@@ -86,6 +87,7 @@ class PlayerState:
     hand: tuple[CardId, ...]
     discard: tuple[CardId, ...] = ()
     active_events: tuple[CardId, ...] = ()
+    hypnotic_target: UnitId | None = None  # Hypnotic Call: the summoner attacks it at +1
 
     def zone_sizes(self) -> tuple[int, int, int]:
         return (len(self.deck), len(self.hand), len(self.discard))
@@ -106,6 +108,8 @@ class GameState:
     extra_attackers: tuple[UnitId, ...] = ()
     destroyed_by: tuple[UnitId, ...] = ()
     sly_used: bool = False
+    forced: tuple[UnitId, ...] = ()  # used a Push/Greater Push this turn
+    controlled: tuple[UnitId, ...] = ()  # units taken by Mind Control this turn
 
     def player(self, player: PlayerId) -> PlayerState:
         for state in self.players:
@@ -144,7 +148,16 @@ class GameState:
         vary: both are salted per process and would break cross-run determinism.
         """
         players: tuple[object, ...] = tuple(
-            (p.player, p.summoner_id, p.magic, p.deck, p.hand, p.discard, p.active_events)
+            (
+                p.player,
+                p.summoner_id,
+                p.magic,
+                p.deck,
+                p.hand,
+                p.discard,
+                p.active_events,
+                p.hypnotic_target,
+            )
             for p in self.players
         )
         units: tuple[object, ...] = tuple(
@@ -159,6 +172,7 @@ class GameState:
                 u.life,
                 u.damage,
                 u.boosts,
+                u.extra_ability,
             )
             for u in sorted(self.units, key=lambda u: (u.owner, u.unit_id))
         )
@@ -176,6 +190,8 @@ class GameState:
             tuple(sorted(self.extra_attackers)),
             tuple(sorted(self.destroyed_by)),
             self.sly_used,
+            tuple(sorted(self.forced)),
+            tuple(sorted(self.controlled)),
         )
 
     def state_hash(self) -> str:

@@ -22,8 +22,11 @@ from sw_engine.actions import (
     Action,
     AttackUnit,
     BuildStructure,
+    CommandAlly,
     DiscardForMagic,
     EndPhase,
+    ForceUnit,
+    MimicAbility,
     MoveUnit,
     PlayEvent,
     SlySwap,
@@ -200,6 +203,12 @@ UNRELENTING = CardId("cave_goblins-unrelenting")
 ENRAGE_THE_HORDE = CardId("cave_goblins-enrage_the_horde")
 SNEAK = CardId("cave_goblins-sneak")
 
+# Breakers events
+MIND_CONTROL = CardId("breakers-mind_control")
+BLAST = CardId("breakers-blast")
+HYPNOTIC_CALL = CardId("breakers-hypnotic_call")
+PERPLEXING_TEMPEST = CardId("breakers-perplexing_tempest")
+
 
 def _active_cards(state: GameState, player: PlayerId) -> tuple[CardId, ...]:
     return state.player(player).active_events
@@ -255,6 +264,85 @@ def _event_sneak(state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
     return replace(state, units=tuple(units))
 
 
+def _event_perplexing_tempest(
+    state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
+) -> GameState:
+    """ACTIVE: movement is already reduced in `_movement_profile` while this is in play."""
+    return state
+
+
+def _event_hypnotic_call(
+    state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
+) -> GameState:
+    """Force the target one space toward your summoner, and mark it for the summoner's +1."""
+    if len(targets) != 1:
+        raise RulesError("Hypnotic Call needs exactly one target")
+    target = state.unit(targets[0])
+    if target.owner == player or target.kind is not UnitKind.UNIT:
+        raise RulesError("Hypnotic Call targets an enemy unit")
+    summoner = state.summoner(player)
+    step_x = (summoner.position.x > target.position.x) - (summoner.position.x < target.position.x)
+    step_y = (summoner.position.y > target.position.y) - (summoner.position.y < target.position.y)
+    squares = _force_steps(state, target, step_x, step_y, 1, through=False)
+    if squares:
+        units = tuple(
+            replace(u, position=squares[0]) if u.unit_id == target.unit_id else u
+            for u in state.units
+        )
+        state = replace(state, units=units)
+    seat = state.player(player)
+    return _with_player(state, replace(seat, hypnotic_target=target.unit_id))
+
+
+def _event_blast(state: GameState, player: PlayerId, targets: tuple[UnitId, ...]) -> GameState:
+    """Push the target up to 3 spaces away from your summoner, damaging everything it passes."""
+    if len(targets) != 1:
+        raise RulesError("Blast needs exactly one target")
+    target = state.unit(targets[0])
+    summoner = state.summoner(player)
+    step_x = (target.position.x > summoner.position.x) - (target.position.x < summoner.position.x)
+    step_y = (target.position.y > summoner.position.y) - (target.position.y < summoner.position.y)
+    if step_x != 0 and step_y != 0:
+        raise RulesError("Blast needs a straight line from your summoner")
+    if not _path_is_clear(state, summoner.position, target.position):
+        raise RulesError("Blast needs a clear line to the target")
+    steps = _force_steps(state, target, step_x, step_y, 3, through=True)
+    if not steps:
+        raise RulesError("Blast cannot move that target")
+
+    passed = [state.occupant(square) for square in steps]
+    destination = steps[-1]
+    units = tuple(
+        replace(u, position=destination) if u.unit_id == target.unit_id else u for u in state.units
+    )
+    state = replace(state, units=units)
+    for victim in [target, *[u for u in passed if u is not None]]:
+        current = next((u for u in state.units if u.unit_id == victim.unit_id), None)
+        if current is not None:
+            state = _apply_damage(state, current, 1)
+    return state
+
+
+def _event_mind_control(
+    state: GameState, player: PlayerId, targets: tuple[UnitId, ...]
+) -> GameState:
+    """Take control of enemy commons and champions near your summoner until end of turn."""
+    summoner = state.summoner(player)
+    chosen = [state.unit(unit_id) for unit_id in targets]
+    for unit in chosen:
+        if unit.owner == player:
+            raise RulesError("Mind Control only targets enemy units")
+        if get_card(unit.card).card_class not in {"Common", "Champion"}:
+            raise RulesError("Mind Control only targets commons and champions")
+        if unit.position.distance_to(summoner.position) > 2:
+            raise RulesError("Mind Control targets must be within 2 spaces of your summoner")
+    units = tuple(
+        replace(u, owner=player) if u.unit_id in {v.unit_id for v in chosen} else u
+        for u in state.units
+    )
+    return replace(state, units=units, controlled=(*state.controlled, *(u.unit_id for u in chosen)))
+
+
 EFFECT_HANDLERS: Final[
     dict[CardId, Callable[[GameState, PlayerId, tuple[UnitId, ...]], GameState]]
 ] = {
@@ -262,7 +350,49 @@ EFFECT_HANDLERS: Final[
     UNRELENTING: _event_unrelenting,
     ENRAGE_THE_HORDE: _event_enrage_the_horde,
     SNEAK: _event_sneak,
+    PERPLEXING_TEMPEST: _event_perplexing_tempest,
+    HYPNOTIC_CALL: _event_hypnotic_call,
+    BLAST: _event_blast,
+    MIND_CONTROL: _event_mind_control,
 }
+
+
+def _event_targets(state: GameState, player: PlayerId, card_id: CardId) -> list[UnitState]:
+    """Enemy units a targeted event may hit, for generating legal actions."""
+    if card_id == BLAST:
+        summoner = state.summoner(player)
+        candidates = [
+            unit
+            for unit in state.units
+            if unit.owner != player
+            and unit.kind is UnitKind.UNIT
+            and get_card(unit.card).card_class in {"Common", "Champion"}
+        ]
+        return [
+            unit
+            for unit in candidates
+            if (unit.position.x == summoner.position.x or unit.position.y == summoner.position.y)
+            and _path_is_clear(state, summoner.position, unit.position)
+        ]
+    if card_id == HYPNOTIC_CALL:
+        return [
+            unit
+            for unit in state.units
+            if unit.owner != player
+            and unit.kind is UnitKind.UNIT
+            and get_card(unit.card).card_class in {"Common", "Champion"}
+        ]
+    if card_id == MIND_CONTROL:
+        summoner = state.summoner(player)
+        return [
+            unit
+            for unit in state.units
+            if unit.owner != player
+            and unit.kind is UnitKind.UNIT
+            and get_card(unit.card).card_class in {"Common", "Champion"}
+            and unit.position.distance_to(summoner.position) <= 2
+        ]
+    return []
 
 
 def _event_legal(state: GameState, player: PlayerId, card_id: CardId) -> bool:
@@ -355,6 +485,14 @@ def _path_is_clear(
     return True
 
 
+def _unit_has_ability(unit: UnitState, keyword: str) -> bool:
+    """Abilities printed on the card plus anything Mimic copied onto this unit."""
+    needle = keyword.lower()
+    if needle in unit.extra_ability.lower():
+        return True
+    return _has_ability(unit.card, keyword)
+
+
 def _has_ability(card_id: CardId, keyword: str) -> bool:
     """True when the printed ability text carries `keyword` (e.g. Charge, Relentless).
 
@@ -385,11 +523,13 @@ def _movement_profile(state: GameState, unit: UnitState) -> tuple[int, bool]:
     """
     limit = MAX_MOVE_DISTANCE
     through_cards = False
-    if _has_ability(unit.card, "Climb") or _has_ability(unit.card, "Flight"):
+    if _unit_has_ability(unit, "Climb") or _unit_has_ability(unit, "Flight"):
         limit += 1
         through_cards = True
-    if _has_ability(unit.card, "Swift"):
+    if _unit_has_ability(unit, "Swift"):
         limit += 1
+    if PERPLEXING_TEMPEST in _active_cards(state, unit.owner):
+        limit = max(1, limit - 1)
 
     if _card_class(unit.card) == "Common":
         for other in state.units:
@@ -407,7 +547,7 @@ def _movement_profile(state: GameState, unit: UnitState) -> tuple[int, bool]:
 def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -> bool:
     if unit.owner != player or not unit.can_move():
         return False
-    if _has_ability(unit.card, "Immobile"):
+    if _unit_has_ability(unit, "Immobile"):
         return False
     if unit.unit_id in state.moved or len(state.moved) >= MAX_UNITS_PER_PHASE:
         return False
@@ -415,7 +555,7 @@ def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -
         return False
     distance = unit.position.distance_to(to)
     limit, through_cards = _movement_profile(state, unit)
-    if _has_ability(unit.card, "Charge"):
+    if _unit_has_ability(unit, "Charge"):
         limit = max(limit, CHARGE_DISTANCE)
     if distance < 1 or distance > limit:
         return False
@@ -425,23 +565,82 @@ def _can_move(state: GameState, unit: UnitState, to: Square, player: PlayerId) -
 def _can_attack(state: GameState, attacker: UnitState, target: UnitState, player: PlayerId) -> bool:
     if attacker.owner != player or not attacker.can_attack():
         return False
-    # Relentless is a standing invitation for an extra attack, so it ignores both the
-    # once-per-phase rule and the three-unit limit.
-    relentless = _has_ability(attacker.card, "Relentless")
-    granted = attacker.unit_id in state.extra_attackers or relentless
-    if not granted and (
-        attacker.unit_id in state.attacked or len(state.attacked) >= MAX_UNITS_PER_PHASE
-    ):
+    # Relentless buys ONE extra attack and lets that unit sit outside the three-unit limit.
+    # It is not an unlimited-attack engine: the count of this unit's attacks is the cap.
+    relentless = _unit_has_ability(attacker, "Relentless")
+    attacks_made = state.attacked.count(attacker.unit_id)
+    limit = 2 if relentless else 1
+    granted = attacker.unit_id in state.extra_attackers
+    if granted:
+        limit = max(limit, attacks_made + 1)
+    if attacks_made >= limit:
+        return False
+    if len(set(state.attacked)) >= MAX_UNITS_PER_PHASE and not relentless and not granted:
         return False
     if target.owner == player:
         return False
     if attacker.attack is AttackKind.MELEE:
         return attacker.position.is_adjacent_to(target.position)
     distance = attacker.position.distance_to(target.position)
-    reach = FAR_SHOT_RANGE if _has_ability(attacker.card, "Far Shot") else RANGED_RANGE
+    reach = FAR_SHOT_RANGE if _unit_has_ability(attacker, "Far Shot") else RANGED_RANGE
     if distance < 1 or distance > reach:
         return False
     return _path_is_clear(state, attacker.position, target.position)
+
+
+def _force_ranges(unit: UnitState) -> int:
+    """How far a push reaches: 2 for Push, 3 for Greater Push."""
+    if _unit_has_ability(unit, "Greater Push"):
+        return 3
+    if _unit_has_ability(unit, "Push"):
+        return 2
+    return 0
+
+
+def _can_force(state: GameState, source: UnitState, target: UnitState, player: PlayerId) -> bool:
+    if source.owner != player or source.unit_id in state.forced:
+        return False
+    reach = _force_ranges(source)
+    if reach == 0:
+        return False
+    if target.owner == player:
+        return False
+    if target.kind is not UnitKind.UNIT:
+        return False
+    if get_card(target.card).card_class not in {"Common", "Champion"}:
+        return False
+    if _unit_has_ability(target, "Steadfast"):
+        return False
+    distance = source.position.distance_to(target.position)
+    return 1 <= distance <= reach
+
+
+def _force_directions(source: UnitState, target: UnitState) -> list[tuple[int, int]]:
+    """Orthogonal directions that move the target away from the source."""
+    delta_x = target.position.x - source.position.x
+    delta_y = target.position.y - source.position.y
+    directions: list[tuple[int, int]] = []
+    if delta_x != 0:
+        directions.append((1 if delta_x > 0 else -1, 0))
+    if delta_y != 0:
+        directions.append((0, 1 if delta_y > 0 else -1))
+    return directions
+
+
+def _force_steps(
+    state: GameState, target: UnitState, dx: int, dy: int, spaces: int, *, through: bool
+) -> list[Square]:
+    """Squares the target would cross, stopping at the first illegal one."""
+    squares: list[Square] = []
+    for step in range(1, spaces + 1):
+        square = Square(target.position.x + dx * step, target.position.y + dy * step)
+        if not square.is_on_board():
+            break
+        occupant = state.occupant(square)
+        if occupant is not None and not through:
+            break
+        squares.append(square)
+    return squares
 
 
 def legal_actions(state: GameState) -> tuple[Action, ...]:
@@ -484,9 +683,11 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
 
     elif state.phase is Phase.ATTACK:
         for unit in state.units:
-            immune = unit.unit_id in state.extra_attackers or _has_ability(unit.card, "Relentless")
-            already = unit.unit_id in state.attacked and not immune
-            if unit.owner != player or already:
+            made = state.attacked.count(unit.unit_id)
+            cap = 2 if _unit_has_ability(unit, "Relentless") else 1
+            if unit.unit_id in state.extra_attackers:
+                cap = max(cap, made + 1)
+            if unit.owner != player or made >= cap:
                 continue
             actions.extend(
                 AttackUnit(unit.unit_id, target.unit_id)
@@ -497,9 +698,47 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
     elif state.phase is Phase.MAGIC:
         actions.extend(DiscardForMagic(card_id) for card_id in player_state.hand)
 
+    if state.phase is Phase.ATTACK:
+        for unit in state.units:
+            if unit.owner != player or unit.unit_id in state.forced:
+                continue
+            for target in state.units:
+                if not _can_force(state, unit, target, player):
+                    continue
+                for dx, dy in _force_directions(unit, target):
+                    if not _force_steps(state, target, dx, dy, 1, through=False):
+                        continue  # pushing into a body or off the board is not an action
+                    actions.append(ForceUnit(unit.unit_id, target.unit_id, dx, dy))
+        for unit in state.units:
+            if unit.owner != player or not _unit_has_ability(unit, "Telepathic Command"):
+                continue
+            if unit.unit_id not in state.attacked:
+                continue
+            actions.extend(
+                CommandAlly(unit.unit_id, ally.unit_id)
+                for ally in state.units_of(player)
+                if ally.kind is UnitKind.UNIT
+                and get_card(ally.card).card_class == "Common"
+                and ally.position.distance_to(unit.position) <= 3
+                and ally.unit_id not in state.extra_attackers
+            )
+
+    if state.phase is Phase.MOVE and not state.moved:
+        for unit in state.units_of(player):
+            if not _unit_has_ability(unit, "Mimic"):
+                continue
+            actions.extend(
+                MimicAbility(unit.unit_id, target.unit_id)
+                for target in state.units
+                if target.unit_id != unit.unit_id
+                and target.kind is UnitKind.UNIT
+                and get_card(target.card).card_class == "Common"
+                and unit.position.distance_to(target.position) <= 3
+            )
+
     if state.phase is Phase.ATTACK and not state.sly_used:
         summoner = state.summoner(player)
-        if _has_ability(summoner.card, "Sly"):
+        if _unit_has_ability(summoner, "Sly"):
             actions.extend(
                 SlySwap(unit.unit_id)
                 for unit in _zero_cost_units(state, player)
@@ -516,6 +755,16 @@ def legal_actions(state: GameState) -> tuple[Action, ...]:
             actions.extend(PlayEvent(card_id, (unit.unit_id,)) for unit in candidates)
             if len(candidates) > 1:
                 actions.append(PlayEvent(card_id, tuple(u.unit_id for u in candidates)))
+        elif card.card_id in (BLAST, HYPNOTIC_CALL):
+            actions.extend(
+                PlayEvent(card_id, (unit.unit_id,))
+                for unit in _event_targets(state, player, card_id)
+            )
+        elif card.card_id == MIND_CONTROL:
+            targets = _event_targets(state, player, card_id)
+            actions.extend(PlayEvent(card_id, (unit.unit_id,)) for unit in targets)
+            if len(targets) > 1:
+                actions.append(PlayEvent(card_id, tuple(u.unit_id for u in targets)))
         else:
             actions.append(PlayEvent(card_id))
 
@@ -684,7 +933,7 @@ def _stupefy_penalty(state: GameState, attacker: UnitState) -> bool:
     return any(
         unit.owner != attacker.owner
         and unit.kind is UnitKind.UNIT
-        and _has_ability(unit.card, "Stupefy")
+        and _unit_has_ability(unit, "Stupefy")
         and unit.position.is_adjacent_to(attacker.position)
         for unit in state.units
     )
@@ -697,7 +946,7 @@ def _apply_engage(
     hit = any(
         unit.owner != mover.owner
         and unit.kind is UnitKind.UNIT
-        and _has_ability(unit.card, "Engage")
+        and _unit_has_ability(unit, "Engage")
         and unit.position.is_adjacent_to(origin)
         and not unit.position.is_adjacent_to(destination)
         for unit in state.units
@@ -721,6 +970,29 @@ def _attack(state: GameState, action: AttackUnit) -> GameState:
     damage = hits(rolls, attacker.attack)
     if damage > 0 and _stupefy_penalty(state, attacker):
         damage = max(0, damage - 1)
+
+    if (
+        damage > 0
+        and _unit_has_ability(attacker, "Mind Capture")
+        and target.kind is UnitKind.UNIT
+        and target.damage + damage >= target.life
+        and get_card(target.card).card_class in {"Common", "Champion"}
+    ):
+        # "You may instead ignore that damage and take control of the target." Taking it is
+        # almost always right, so the engine takes it and says so in docs/MECHANICS.md.
+        captured = tuple(
+            replace(unit, owner=attacker.owner) if unit.unit_id == target.unit_id else unit
+            for unit in state.units
+        )
+        return replace(
+            state,
+            units=captured,
+            rng_counter=state.rng_counter + 1,
+            attacked=(*state.attacked, attacker.unit_id),
+            attacked_any=True,
+            extra_attackers=tuple(u for u in state.extra_attackers if u != attacker.unit_id),
+            controlled=(*state.controlled, target.unit_id),
+        )
 
     after = _apply_damage(state, target, damage)
 
@@ -778,6 +1050,53 @@ def _play_event(state: GameState, action: PlayEvent) -> GameState:
     return _with_player(state, player_state)
 
 
+def _force(state: GameState, action: ForceUnit) -> GameState:
+    """Move the target one space away, damaging anything it is pushed through."""
+    source = state.unit(action.source)
+    target = state.unit(action.target)
+    if not _can_force(state, source, target, state.active):
+        raise RulesError("that push is not legal")
+    if (action.dx, action.dy) not in _force_directions(source, target):
+        raise RulesError("force must push the target away from the source")
+
+    squares = _force_steps(state, target, action.dx, action.dy, 1, through=False)
+    if not squares:
+        raise RulesError("nothing to push into: the target is blocked")
+    destination = squares[0]
+    units = tuple(
+        replace(unit, position=destination) if unit.unit_id == target.unit_id else unit
+        for unit in state.units
+    )
+    return replace(state, units=units, forced=(*state.forced, source.unit_id))
+
+
+def _command_ally(state: GameState, action: CommandAlly) -> GameState:
+    source = state.unit(action.source)
+    target = state.unit(action.target)
+    if source.unit_id not in state.attacked or not _unit_has_ability(source, "Telepathic Command"):
+        raise RulesError("Telepathic Command needs this unit to have attacked")
+    if target.owner != state.active or target.kind is not UnitKind.UNIT:
+        raise RulesError("the commanded unit must be a friendly unit")
+    if source.position.distance_to(target.position) > 3:
+        raise RulesError("the commanded unit is out of range")
+    return replace(state, extra_attackers=(*state.extra_attackers, target.unit_id))
+
+
+def _mimic(state: GameState, action: MimicAbility) -> GameState:
+    unit = state.unit(action.unit)
+    target = state.unit(action.target)
+    if unit.owner != state.active or not _unit_has_ability(unit, "Mimic"):
+        raise RulesError("only a unit with Mimic can copy abilities")
+    if unit.position.distance_to(target.position) > 3:
+        raise RulesError("the copied unit is out of range")
+    card = get_card(target.card)
+    copied = f"{card.ability_name or ''} {card.ability or ''}".strip()
+    units = tuple(
+        replace(u, extra_ability=copied) if u.unit_id == unit.unit_id else u for u in state.units
+    )
+    return replace(state, units=units)
+
+
 def _sly_swap(state: GameState, action: SlySwap) -> GameState:
     """Sneeks exchanges places with a friendly 0 cost unit, once per turn."""
     player = state.active
@@ -801,7 +1120,7 @@ def _sly_swap(state: GameState, action: SlySwap) -> GameState:
 def _start_of_attack_phase(state: GameState) -> GameState:
     """Blarf's Blood Runes: spend 1 magic for a boost, or take 1 damage (p.12)."""
     for unit in tuple(state.units):
-        if unit.owner != state.active or not _has_ability(unit.card, "Blood Runes"):
+        if unit.owner != state.active or not _unit_has_ability(unit, "Blood Runes"):
             continue
         seat = state.player(unit.owner)
         if seat.magic >= 1 and unit.boosts < MAX_BOOSTS:
@@ -823,7 +1142,7 @@ def _start_of_attack_phase(state: GameState) -> GameState:
 def _end_of_attack_phase(state: GameState) -> GameState:
     """The Eater: if it destroyed nothing this turn, it eats a neighbour or itself (p.12)."""
     for unit in tuple(state.units):
-        if unit.owner != state.active or not _has_ability(unit.card, "Feed the Eater"):
+        if unit.owner != state.active or not _unit_has_ability(unit, "Feed the Eater"):
             continue
         if unit.unit_id in state.destroyed_by:
             continue
@@ -845,7 +1164,7 @@ def _end_of_attack_phase(state: GameState) -> GameState:
 def _end_of_turn_triggers(state: GameState) -> GameState:
     """Smeg's Magic Junkie: pay 1 magic at the end of your turn or be discarded (p.12)."""
     for unit in tuple(state.units):
-        if unit.owner != state.active or not _has_ability(unit.card, "Magic Junkie"):
+        if unit.owner != state.active or not _unit_has_ability(unit, "Magic Junkie"):
             continue
         seat = state.player(unit.owner)
         if seat.magic >= 1:
@@ -858,6 +1177,10 @@ def _end_of_turn_triggers(state: GameState) -> GameState:
 def _effective_strength(state: GameState, attacker: UnitState, target: UnitState) -> int:
     """Printed strength plus any bonuses the active events grant (Pile On's Gang Up)."""
     strength = attacker.strength + attacker.boosts
+    if attacker.kind is UnitKind.SUMMONER:
+        seat = state.player(attacker.owner)
+        if seat.hypnotic_target == target.unit_id:
+            strength += 1
     if PILE_ON in _active_cards(state, attacker.owner):
         strength += sum(
             1
@@ -911,6 +1234,16 @@ def _end_phase(state: GameState) -> GameState:
         state = _with_player(state, _draw_up_to_hand_size(state.player(state.active)))
         if is_terminal(state):
             return state
+        if state.controlled:
+            # Mind Control and Mind Capture borrow units "until the end of your turn".
+            former = opponent(state.active)
+            state = replace(
+                state,
+                units=tuple(
+                    replace(unit, owner=former) if unit.unit_id in state.controlled else unit
+                    for unit in state.units
+                ),
+            )
         state = replace(
             state,
             turn=state.turn + 1,
@@ -922,6 +1255,9 @@ def _end_phase(state: GameState) -> GameState:
             extra_attackers=(),
             destroyed_by=(),
             sly_used=False,
+            forced=(),
+            controlled=(),
+            units=tuple(replace(unit, extra_ability="") for unit in state.units),
         )
         incoming = state.player(state.active)
         if incoming.active_events:
@@ -966,6 +1302,12 @@ def step(state: GameState, action: Action) -> GameState:
             return _play_event(state, action)
         case SlySwap():
             return _sly_swap(state, action)
+        case ForceUnit():
+            return _force(state, action)
+        case CommandAlly():
+            return _command_ally(state, action)
+        case MimicAbility():
+            return _mimic(state, action)
     raise RulesError(f"unhandled action type: {type(action).__name__}")
 
 

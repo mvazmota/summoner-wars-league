@@ -158,6 +158,7 @@ def _apply_verified(card: CardDefinition, verified: dict[str, VerifiedCard]) -> 
     cost = entry["cost"]
     return replace(
         card,
+        card_id=CardId(str(entry["id"])),
         cost=card.cost if cost is None else cost,
         life=life,
         strength=strength,

@@ -29,7 +29,7 @@ UNRELENTING: Final[CardId] = CardId("cave_goblins-unrelenting")
 ENRAGE: Final[CardId] = CardId("cave_goblins-enrage_the_horde")
 SNEAK: Final[CardId] = CardId("cave_goblins-sneak")
 CLIMBER: Final[CardId] = CardId("cave_goblins-horde_climber")
-SLINGER: Final[CardId] = CardId("cave_goblins-slinger")
+SLINGER: Final[CardId] = CardId("cave_goblins-horde_slinger")
 BEAST_RIDER: Final[CardId] = CardId("cave_goblins-beast_rider")
 
 
@@ -473,3 +473,17 @@ def test_engage_does_not_fire_when_the_mover_never_stood_beside_it() -> None:
     after = step(state, MoveUnit(walker.unit_id, Square(3, 0)))
 
     assert after.unit(walker.unit_id).damage == 0
+
+
+def test_relentless_attacks_twice_not_forever() -> None:
+    """The card buys one extra attack; an unlimited loop used to end games in four turns."""
+    slinger = _unit(100, SLINGER, Square(3, 2), attack=AttackKind.RANGED, strength=2)
+    target = _unit(200, CLIMBER, Square(3, 3), owner=PLAYER_B, life=20)
+    state = _battle((slinger, target), phase=Phase.ATTACK)
+
+    once = step(state, AttackUnit(slinger.unit_id, target.unit_id))
+    twice = step(once, AttackUnit(slinger.unit_id, target.unit_id))
+
+    assert not any(
+        isinstance(a, AttackUnit) and a.attacker == slinger.unit_id for a in legal_actions(twice)
+    ), "two attacks is the whole allowance"

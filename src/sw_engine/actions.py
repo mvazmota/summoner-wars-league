@@ -74,8 +74,37 @@ class SlySwap:
     target: UnitId
 
 
+@dataclass(frozen=True, slots=True)
+class ForceUnit:
+    """Push/Greater Push: force `target` one space in the given direction (p.12)."""
+
+    source: UnitId
+    target: UnitId
+    dx: int
+    dy: int
+
+
+@dataclass(frozen=True, slots=True)
+class CommandAlly:
+    """Gulldune's Telepathic Command: a friendly common attacks again."""
+
+    source: UnitId
+    target: UnitId
+
+
+@dataclass(frozen=True, slots=True)
+class MimicAbility:
+    """Mind Witch's Mimic: copy a common's abilities until the end of the turn."""
+
+    unit: UnitId
+    target: UnitId
+
+
 type Action = (
-    SlySwap
+    ForceUnit
+    | CommandAlly
+    | MimicAbility
+    | SlySwap
     | EndPhase
     | SummonUnit
     | BuildStructure

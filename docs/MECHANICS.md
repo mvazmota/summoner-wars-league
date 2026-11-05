@@ -47,15 +47,25 @@ All twelve transcribed cards now behave as printed. Two choices are worth knowin
 - **Cling follows only the unit that moved.** Several Clingers can chain off one move, but a
   unit that starts adjacent to two Clingers drags both.
 
-## Breakers: partially implemented
+## Breakers: complete
 
-Transcribed and wired: Swift, Flight, Levitate, Far Shot, Stupefy, Engage.
+Every Breakers card behaves as printed, including the force subsystem that Push, Greater
+Push, Blast and Hypnotic Call needed. `ForceUnit` pushes a target one space away from its
+source, refuses to pull a unit closer, stops at a body or the board edge, and `Steadfast`
+blocks it outright.
 
-Transcribed but **not** wired: **Push** (Wind Mage) and **Greater Push** (Halal) — both need
-a force action that does not exist yet — **Steadfast** (Halal), which only matters once
-forcing exists, **Mimic** (Mind Witch), **Mind Capture** (Taculla), **Telepathic Command**
-(Gulldune), and the four events: Mind Control, Hypnotic Call, Blast and Perplexing Tempest.
-The events are correctly excluded from `legal_actions` because they have no handler.
+Three deliberate simplifications, all visible in the code:
+
+- **Mind Capture** is automatic. The card says "you may ignore that damage and take control";
+  the engine always takes the unit, because a capture is almost always better than a kill
+  and a may-ability would need its own action.
+- **Telepathic Command** needs a `CommandAlly` action: after Gulldune attacks, the player
+  picks which friendly common within 3 spaces attacks again. Without the action it would
+  silently grant extra attacks.
+- **Blast** always pushes directly away from your summoner and as far as it can (up to 3),
+  damaging every unit the target passes through. The card lets the player choose distance;
+  the engine takes the maximum. **Hypnotic Call** only moves the target when the square
+  toward your summoner is empty.
 
 ## Not implemented yet
 
