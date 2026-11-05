@@ -7,6 +7,10 @@ __pycache__/
 .pytest_cache/
 data/*
 !data/.gitkeep
+!data/cards/
+!data/cards/*.json
+out/
+
 reports/
 *.parquet
 *.sqlite

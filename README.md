@@ -8,6 +8,24 @@ agent-style effects, and marginal value of individual units.
 interfaces, determinism rules, milestones M0–M5 with acceptance criteria, testing and statistics
 rules, and the things not to do.
 
+## Watch a game
+
+```bash
+uv run python scripts/visualize.py --seed 7 --out out/replay.html
+```
+
+That plays one game with a simple greedy policy and writes a **self-contained HTML viewer**:
+the whole game is embedded as JSON, so the page needs no server, no build step and no
+network. Open `out/replay.html` directly, or serve it to another device on the LAN:
+
+```bash
+python -m http.server 8765 --directory out     # http://<this machine>:8765/replay.html
+```
+
+Controls: `←`/`→` step through actions, `space` plays, the slider scrubs, and clicking a card
+on the board shows its stats. The policy is a placeholder — it attacks when it can and plays
+an event when it is cheap — so the viewer shows the engine working, not good play.
+
 ## Status
 
 **M1 complete** — typed engine surface, determinism guard, solver-independent rules contract.

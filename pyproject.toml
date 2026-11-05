@@ -36,8 +36,8 @@ known-first-party = ["sw_engine", "sw_cards", "agents", "league"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests"]
-mypy_path = "src"
+files = ["src", "tests", "scripts"]
+mypy_path = ["src", "scripts"]
 warn_unreachable = true
 
 [tool.pytest.ini_options]
