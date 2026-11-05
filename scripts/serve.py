@@ -24,6 +24,7 @@ from sw_league.analysis import summarise
 from sw_league.replay import play_game
 
 WEB_DIR: Final[Path] = Path(__file__).resolve().parents[1] / "web"
+ART_DIR: Final[Path] = Path(__file__).resolve().parents[1] / "art"
 MAX_SEED: Final[int] = 2**31 - 1
 
 
@@ -113,6 +114,25 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json({"error": str(error)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
             self._json(payload)
+            return
+
+        if parsed.path.startswith("/art/"):
+            # Local-only card art, cropped from the owner's own photos. Git-ignored.
+            name = parsed.path.removeprefix("/art/")
+            if "/" in name or not name.endswith(".png"):
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            path = ART_DIR / name
+            if not path.exists():
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            body = path.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         if parsed.path in ("/", "/index.html"):

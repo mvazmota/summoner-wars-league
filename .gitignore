@@ -15,3 +15,6 @@ reports/
 *.parquet
 *.sqlite
 *.jsonl
+
+# Local card art cropped from the owner's photos: never commit it.
+art/

@@ -101,6 +101,8 @@ def describe_action(action: Action) -> dict[str, object]:
             payload.update(card=str(card), cost=get_card(card).cost)
         case PlayEvent(card, _targets):
             payload.update(card=str(card), cost=get_card(card).cost, name=get_card(card).name)
+        case MoveUnit(unit_id, _to):
+            payload.update(unit=int(unit_id))
         case ForceUnit(source, target, dx, dy):
             payload.update(source=int(source), target=int(target), dx=dx, dy=dy)
         case CommandAlly(source, target):

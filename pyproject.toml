@@ -19,6 +19,7 @@ dev = [
     "hypothesis>=6.112",
     "mypy>=1.11",
     "ruff>=0.6",
+    "pillow>=13.0.0",
 ]
 
 [tool.ruff]

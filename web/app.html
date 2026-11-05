@@ -50,8 +50,12 @@
   .cell.side-a { background: #1d232a; border-color: #2b3946; }
   .cell.side-b { background: #2a221d; border-color: #46352b; }
   .unit { position: absolute; inset: 2px; border-radius: 5px; padding: 2px 3px;
-    display: flex; flex-direction: column; justify-content: space-between;
-    font-size: 10px; line-height: 1.1; cursor: pointer; overflow: hidden; }
+    display: flex; gap: 3px; font-size: 10px; line-height: 1.1; cursor: pointer; overflow: hidden; }
+  .unit .thumb { width: 22px; height: 100%; object-fit: cover; border-radius: 3px;
+    flex: 0 0 auto; background: #111; }
+  .unit.acted { box-shadow: 0 0 0 2px #ffd479, 0 0 12px rgba(255, 212, 121, .55); }
+  .unit .body { display: flex; flex-direction: column; justify-content: space-between;
+    flex: 1 1 auto; min-width: 0; }
   .unit.a { background: #234a63; border: 1px solid var(--a); color: #e8f4ff; }
   .unit.b { background: #63372a; border: 1px solid var(--b); color: #ffece4; }
   .unit.summoner { box-shadow: 0 0 0 2px var(--gold) inset; }
@@ -276,7 +280,7 @@
   function render() {
     var frame = state.frames[state.index];
     var snap = frame.state;
-    renderBoard(snap);
+    renderBoard(snap, frame.action);
     renderPlayers(snap);
 
     $("turn").textContent = "turno " + snap.turn;
@@ -292,8 +296,14 @@
     $("next").disabled = state.index === state.frames.length - 1;
   }
 
-  function renderBoard(snap) {
+  function renderBoard(snap, action) {
     board.textContent = "";
+    var highlight = {};
+    if (action) {
+      ["unit", "attacker", "source", "target"].forEach(function (key) {
+        if (action[key] !== undefined && action[key] !== null) highlight[action[key]] = true;
+      });
+    }
     var bySquare = {};
     snap.units.forEach(function (unit) { bySquare[unit.x + "," + unit.y] = unit; });
     for (var row = 0; row < 8; row++) {
@@ -301,22 +311,37 @@
         var y = 7 - row;
         var cell = el("div", "cell side-" + (y < 4 ? "a" : "b"));
         var unit = bySquare[col + "," + y];
-        if (unit) cell.appendChild(renderUnit(unit));
+        if (unit) cell.appendChild(renderUnit(unit, highlight[unit.id]));
         board.appendChild(cell);
       }
     }
   }
 
-  function renderUnit(unit) {
+  function renderUnit(unit, highlighted) {
     var cls = "unit " + (unit.owner === 0 ? "a" : "b");
+    if (highlighted) cls += " acted";
     if (unit.kind === "SUMMONER") cls += " summoner";
     if (unit.kind === "GATE" || unit.kind === "STRUCTURE") cls += " gate";
     var node = el("div", cls);
-    node.appendChild(el("div", "name", unit.name + (unit.boosts ? " +" + unit.boosts : "")));
+
+    // Local art only: the crops live in art/ (git-ignored) and vanish if absent.
+    if (unit.kind !== "GATE") {
+      var thumb = document.createElement("img");
+      thumb.className = "thumb";
+      thumb.alt = "";
+      thumb.src = "/art/" + unit.card + ".png";
+      thumb.addEventListener("error", function () { thumb.remove(); });
+      node.appendChild(thumb);
+    }
+
+    var body = el("div", "body");
+    body.appendChild(el("div", "name", unit.name + (unit.boosts ? " +" + unit.boosts : "")));
     var stats = el("div", "stats");
     stats.appendChild(el("span", "dmg", (unit.life - unit.damage) + "/" + unit.life));
     stats.appendChild(el("span", null, unit.kind === "GATE" ? "gate" : String(unit.strength + unit.boosts)));
-    node.appendChild(stats);
+    body.appendChild(stats);
+    node.appendChild(body);
+
     node.addEventListener("click", function () { showDetails(unit); });
     return node;
   }

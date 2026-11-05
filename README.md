@@ -41,7 +41,21 @@ python -m http.server 8765 --directory out     # http://<this machine>:8765/repl
 ```
 
 Controls: `←`/`→` step through actions, `space` plays, the slider scrubs, and clicking a card
-on the board shows its stats. The policy is a placeholder — it attacks when it can and plays
+on the board shows its stats.
+
+### Card art (local only)
+
+```bash
+uv run python scripts/build_art.py --out art     # crops from the card photos in this session
+```
+
+Each unit chip then shows a thumbnail of its own artwork, and the unit that acted in the
+current frame gets a gold outline — which is the fastest way to follow a move. Gates have no
+art and skip the slot; anything missing falls back to the plain chip.
+
+**The artwork belongs to Plaid Hat Games and is never committed:** `art/` is git-ignored, the
+crops are made from the owner's own card photos, and `scripts/build_art.py` is the only thing
+in the repository. Do not publish an `art/` directory. The policy is a placeholder — it attacks when it can and plays
 an event when it is cheap — so the viewer shows the engine working, not good play.
 
 ## Status
