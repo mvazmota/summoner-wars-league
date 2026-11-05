@@ -13,7 +13,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from sw_cards import get_card
+from sw_cards import get_card, get_deck, known_decks
 from sw_engine.actions import (
     AttackUnit,
     BuildStructure,
@@ -37,6 +37,8 @@ from sw_engine.engine import (
 )
 from sw_engine.ids import PLAYER_A, PLAYER_B, CardId, DeckId, PlayerId, UnitId, opponent
 from sw_engine.state import (
+    BOARD_HEIGHT,
+    BOARD_WIDTH,
     HAND_SIZE,
     MAX_UNITS_PER_PHASE,
     AttackKind,
@@ -48,8 +50,8 @@ from sw_engine.state import (
     UnitState,
 )
 
-DECK_A = DeckId("placeholder_alpha")
-DECK_B = DeckId("placeholder_beta")
+DECK_A = DeckId("savanna_elves")
+DECK_B = DeckId("cave_goblins")
 
 
 def _state(seed: int = 7) -> GameState:
@@ -387,3 +389,41 @@ def test_games_terminate_under_a_turn_cap(seed: int) -> None:
             break
         state = step(state, rng.choice(actions))
     assert is_terminal(state) or adjudicate_by_life(state) is not None or state.turn > 200
+
+
+# --------------------------------------------------------------------------------------
+# Starting layouts — transcribed from the summoner card backs (docs/STARTING_LAYOUTS.md)
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("deck_id", sorted(known_decks()))
+def test_setup_matches_the_card_back(deck_id: DeckId) -> None:
+    """Player A sits exactly on the printed layout; player B is the 180 degree mirror."""
+    deck = get_deck(deck_id)
+    state = initial_state(deck_id, deck_id, seed=1)
+
+    expected: list[tuple[CardId, Square]] = [
+        (deck.layout.summoner[0].card_id, deck.layout.summoner[1]),
+        (deck.layout.gate[0].card_id, deck.layout.gate[1]),
+        *((card.card_id, square) for card, square in deck.layout.units),
+    ]
+
+    a_positions = {unit.card: unit.position for unit in state.units_of(PLAYER_A)}
+    b_positions = {unit.card: unit.position for unit in state.units_of(PLAYER_B)}
+
+    for card_id, square in expected:
+        assert a_positions[card_id] == square
+        assert b_positions[card_id] == Square(
+            BOARD_WIDTH - 1 - square.x, BOARD_HEIGHT - 1 - square.y
+        )
+
+
+@pytest.mark.parametrize("deck_id", sorted(known_decks()))
+def test_setup_is_legal_and_inside_own_half(deck_id: DeckId) -> None:
+    layout = get_deck(deck_id).layout
+    squares = [layout.summoner[1], layout.gate[1], *(sq for _, sq in layout.units)]
+
+    assert len({(s.x, s.y) for s in squares}) == 4, "two setup cards share a square"
+    for square in squares:
+        assert square.is_on_board()
+        assert 0 <= square.y <= 3, "setup cards must start inside the owner's half"

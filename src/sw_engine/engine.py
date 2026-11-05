@@ -88,16 +88,6 @@ def derive_rng(seed: int, counter: int) -> random.Random:
 # --------------------------------------------------------------------------------------
 
 
-def _starting_square(player: PlayerId) -> Square:
-    """Placeholder starting square for the summoner.
-
-    TODO(data): the real layout is printed on the back of each summoner card, see
-    docs/UNRESOLVED.md. Until card data lands, both sides use a mirrored layout.
-    """
-    x = BOARD_WIDTH // 2
-    return Square(x, 0) if player == PLAYER_A else Square(x, BOARD_HEIGHT - 1)
-
-
 def _player_unit(
     card: CardDefinition, owner: PlayerId, unit_id: UnitId, position: Square
 ) -> UnitState:
@@ -113,27 +103,37 @@ def _player_unit(
     )
 
 
+def _mirror(square: Square) -> Square:
+    """Rotate a square 180 degrees: the second player's side is the board's other half."""
+    return Square(BOARD_WIDTH - 1 - square.x, BOARD_HEIGHT - 1 - square.y)
+
+
+def _place(square: Square, player: PlayerId) -> Square:
+    return square if player == PLAYER_A else _mirror(square)
+
+
 def _build_player(
     deck_id: DeckId, player: PlayerId, starting_magic: int, rng: random.Random
 ) -> tuple[PlayerState, tuple[UnitState, ...]]:
+    """Build one seat: shuffle the deck, draw a hand, and place the setup cards.
+
+    Setup positions come from `sw_cards` (transcribed from the card backs) and are
+    mirrored for player B. Card *stats* are still placeholders — see docs/CARD_STATUS.md.
+    """
     definition = get_deck(deck_id)
     cards: list[CardId] = list(definition.composition)
     rng.shuffle(cards)
 
-    summoner_square = _starting_square(player)
-    direction = 1 if player == PLAYER_A else -1
-    gate_square = Square(summoner_square.x, summoner_square.y + direction)
-    unit_squares = (
-        Square(max(0, gate_square.x - 1), gate_square.y),
-        Square(min(BOARD_WIDTH - 1, gate_square.x + 1), gate_square.y),
-    )
+    layout = definition.layout
+    summoner_card, summoner_square = layout.summoner
+    gate_card, gate_square = layout.gate
 
     starting: list[UnitState] = [
-        _player_unit(definition.summoner, player, UnitId(1), summoner_square),
-        _player_unit(definition.gate, player, UnitId(2), gate_square),
+        _player_unit(summoner_card, player, UnitId(1), _place(summoner_square, player)),
+        _player_unit(gate_card, player, UnitId(2), _place(gate_square, player)),
     ]
-    for index, card in enumerate(definition.starting_units):
-        starting.append(_player_unit(card, player, UnitId(3 + index), unit_squares[index]))
+    for index, (card, square) in enumerate(layout.units):
+        starting.append(_player_unit(card, player, UnitId(3 + index), _place(square, player)))
 
     hand = tuple(cards[:INITIAL_HAND_SIZE])
     remaining = tuple(cards[INITIAL_HAND_SIZE:])
@@ -466,11 +466,13 @@ def _discard_for_magic(state: GameState, action: DiscardForMagic) -> GameState:
     player_state = state.active_player()
     if action.card not in player_state.hand:
         raise RulesError("discarded card is not in hand")
+    # Remove exactly one copy: hands legitimately hold duplicates, and a value filter
+    # would silently discard every copy of that card.
     player_state = replace(
         player_state,
-        hand=tuple(c for c in player_state.hand if c != action.card),
         discard=(*player_state.discard, action.card),
     )
+    player_state = _remove_from_hand(player_state, action.card)
     player_state = _gain_magic(player_state, 1)
     return _with_player(state, player_state)
 

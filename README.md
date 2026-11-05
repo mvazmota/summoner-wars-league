@@ -10,10 +10,13 @@ rules, and the things not to do.
 
 ## Status
 
-**M0 complete** — typed engine surface, determinism guard, solver-independent rules contract.
-Setup now follows the official rulebook v1.2 (random first player, magic 2/3, 6x8 battlefield,
-draw to 5); see [`docs/RULES.md`](./docs/RULES.md). No real cards and no agents yet.
-Next milestone: **M1 — rules core (one faction vs itself)**.
+**M1 complete** — typed engine surface, determinism guard, solver-independent rules contract.
+Setup follows the official rulebook v1.2 (random first player, magic 2/3, 6x8 battlefield,
+draw to 5) and each faction's printed starting layout — see [`docs/RULES.md`](./docs/RULES.md)
+and [`docs/STARTING_LAYOUTS.md`](./docs/STARTING_LAYOUTS.md). The engine plays full turns:
+summon, move, build, attack with dice, magic, draw. Card **stats are still placeholders**;
+no abilities and no agents yet. Next milestone: **M3 — card data and effect DSL** (M2 fuzzing
+runs alongside).
 
 Verified on this machine:
 
@@ -21,7 +24,7 @@ Verified on this machine:
 uv sync
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-uv run pytest -m "not slow"       # 18 passed
+uv run pytest -m "not slow"       # 36 passed
 uv run python -m sw_engine.smoke  # prints the canonical state hash
 ```
 

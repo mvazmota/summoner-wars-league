@@ -8,8 +8,8 @@ from __future__ import annotations
 from sw_engine.engine import initial_state, legal_actions, step
 from sw_engine.ids import DeckId
 
-DEFAULT_DECK_A = DeckId("placeholder_alpha")
-DEFAULT_DECK_B = DeckId("placeholder_beta")
+DEFAULT_DECK_A = DeckId("cave_goblins")
+DEFAULT_DECK_B = DeckId("savanna_elves")
 DEFAULT_SEED = 20261105
 
 
